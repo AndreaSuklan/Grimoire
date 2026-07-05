@@ -203,6 +203,35 @@ const SKILLS=[
 const CONDITIONS=["Blinded","Charmed","Deafened","Frightened","Grappled","Incapacitated","Invisible","Paralyzed","Petrified","Poisoned","Prone","Restrained","Stunned","Unconscious"];
 const CLASSES=["Artificer","Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard","Other"];
 const HIT_DIE={Barbarian:"d12",Fighter:"d10",Paladin:"d10",Ranger:"d10",Artificer:"d8",Bard:"d8",Cleric:"d8",Druid:"d8",Monk:"d8",Rogue:"d8",Warlock:"d8",Sorcerer:"d6",Wizard:"d6",Other:"d8"};
+const EDITIONS={"2014":"5e (2014)","2024":"5e (2024)"};
+const SAVE_PROFS={Barbarian:["str","con"],Bard:["dex","cha"],Cleric:["wis","cha"],Druid:["int","wis"],Fighter:["str","con"],Monk:["str","dex"],Paladin:["wis","cha"],Ranger:["str","dex"],Rogue:["dex","int"],Sorcerer:["con","cha"],Warlock:["wis","cha"],Wizard:["int","wis"],Artificer:["con","int"]};
+const CASTER_KIND={Bard:"full",Cleric:"full",Druid:"full",Sorcerer:"full",Wizard:"full",Paladin:"half",Ranger:"half",Artificer:"half",Warlock:"pact"};
+const CLASS_PROFS={
+ Barbarian:{armor:"Light armor, medium armor, shields",weapons:"Simple & martial weapons",tools:""},
+ Bard:{armor:"Light armor",weapons:"Simple weapons",tools:"Three musical instruments"},
+ Cleric:{armor:"Light armor, medium armor, shields",weapons:"Simple weapons",tools:""},
+ Druid:{armor:"Light armor, medium armor, shields (nonmetal)",weapons:"Simple weapons",tools:"Herbalism kit"},
+ Fighter:{armor:"All armor, shields",weapons:"Simple & martial weapons",tools:""},
+ Monk:{armor:"None",weapons:"Simple weapons, shortswords / martial weapons with Light property",tools:"One artisan's tools or musical instrument"},
+ Paladin:{armor:"All armor, shields",weapons:"Simple & martial weapons",tools:""},
+ Ranger:{armor:"Light armor, medium armor, shields",weapons:"Simple & martial weapons",tools:""},
+ Rogue:{armor:"Light armor",weapons:"Simple weapons, hand crossbows, longswords, rapiers, shortswords / martial weapons with Finesse or Light",tools:"Thieves' tools"},
+ Sorcerer:{armor:"None",weapons:"Simple weapons",tools:""},
+ Warlock:{armor:"Light armor",weapons:"Simple weapons",tools:""},
+ Wizard:{armor:"None",weapons:"Simple weapons",tools:""}};
+const CLASS_SKILL_CHOICES={
+ Barbarian:{n:2,from:["animal","athletics","intimidation","nature","perception","survival"]},
+ Bard:{n:3,from:"any"},
+ Cleric:{n:2,from:["history","insight","medicine","persuasion","religion"]},
+ Druid:{n:2,from:["arcana","animal","insight","medicine","nature","perception","religion","survival"]},
+ Fighter:{n:2,from:["acrobatics","animal","athletics","history","insight","intimidation","perception","persuasion","survival"]},
+ Monk:{n:2,from:["acrobatics","athletics","history","insight","religion","stealth"]},
+ Paladin:{n:2,from:["athletics","insight","intimidation","medicine","persuasion","religion"]},
+ Ranger:{n:3,from:["animal","athletics","insight","investigation","nature","perception","stealth","survival"]},
+ Rogue:{n:4,from:["acrobatics","athletics","deception","insight","intimidation","investigation","perception","performance","persuasion","sleight","stealth"]},
+ Sorcerer:{n:2,from:["arcana","deception","insight","intimidation","persuasion","religion"]},
+ Warlock:{n:2,from:["arcana","deception","history","intimidation","investigation","nature","religion"]},
+ Wizard:{n:2,from:["arcana","history","insight","investigation","medicine","religion"]}};
 const FULL_CASTER_SLOTS={1:[2],2:[3],3:[4,2],4:[4,3],5:[4,3,2],6:[4,3,3],7:[4,3,3,1],8:[4,3,3,2],9:[4,3,3,3,1],10:[4,3,3,3,2],11:[4,3,3,3,2,1],12:[4,3,3,3,2,1],13:[4,3,3,3,2,1,1],14:[4,3,3,3,2,1,1],15:[4,3,3,3,2,1,1,1],16:[4,3,3,3,2,1,1,1],17:[4,3,3,3,2,1,1,1,1],18:[4,3,3,3,3,1,1,1,1],19:[4,3,3,3,3,2,1,1,1],20:[4,3,3,3,3,2,2,1,1]};
 const XP_THRESHOLDS=[0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000];
 const AVATAR_COLORS=["#a06cd5","#e35d6a","#5dc98a","#5da9e3","#e0b45c","#d569b0","#6cd5c4","#e08a5c"];
@@ -230,11 +259,12 @@ const STORE_KEY="grimoire_v1";
 let db={characters:[],currentId:null};
 let curTab="main";
 function save(){localStorage.setItem(STORE_KEY,JSON.stringify(db));}
-function load(){try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&d.characters)db=d;}catch(e){}}
+function load(){try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&d.characters)db=d;}catch(e){}
+  db.characters.forEach(c=>{if(!c.edition)c.edition="2014";});}
 function cur(){return db.characters.find(c=>c.id===db.currentId)||null;}
 
 function newCharacter(){
-  return {id:uid(),name:"New Hero",race:"",background:"",alignment:"",xp:0,
+  return {id:uid(),name:"New Hero",edition:"2014",race:"",background:"",alignment:"",xp:0,
     classes:[{name:"Fighter",subclass:"",level:1}],
     abilities:{str:10,dex:10,con:10,int:10,wis:10,cha:10},
     saveProf:{str:false,dex:false,con:false,int:false,wis:false,cha:false},
@@ -316,7 +346,7 @@ function renderList(){
     <div class="charcard" onclick="openChar('${c.id}')">
       <div class="avatar" style="background:${c.color}">${esc((c.name||"?")[0].toUpperCase())}</div>
       <div class="info"><div class="cnm">${esc(c.name)}</div>
-      <div class="csub">${esc(c.race||"")} ${esc(classStr(c))} · Level ${totalLevel(c)}</div>
+      <div class="csub">${esc(c.race||"")} ${esc(classStr(c))} · Level ${totalLevel(c)} · ${c.edition==="2024"?"’24":"’14"} rules</div>
       <div class="csub">HP ${c.hp.current}/${c.hp.max} · AC ${c.ac}</div></div>
       <button class="iconbtn" onclick="event.stopPropagation();charMenu('${c.id}')">⋮</button>
     </div>`).join("");}
@@ -335,7 +365,118 @@ function exportChar(id){const c=db.characters.find(x=>x.id===id);
   const blob=new Blob([JSON.stringify(c,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download=(c.name||"character").replace(/\W+/g,"_")+".json";a.click();closeModal();}
-$("#btnNewChar").onclick=()=>{const c=newCharacter();db.characters.push(c);save();openChar(c.id);editIdentity();};
+$("#btnNewChar").onclick=()=>newCharWizard();
+
+/* ================== CLASS AUTOMATION ENGINE ================== */
+function findBaseClass(ed,name){const lib=classLib(ed);return lib?lib.find(x=>!x.sub&&x.name===name):null;}
+function findSubClass(ed,clsName,subName){const lib=classLib(ed);if(!lib||!subName)return null;
+  return lib.find(x=>x.sub===clsName&&x.name.toLowerCase()===subName.toLowerCase());}
+function expectedClassFeatures(c){ // Map fid -> feature, from SRD lib for this char's classes/levels
+  const out=new Map();
+  for(const k of c.classes){
+    const sources=[findBaseClass(c.edition,k.name),findSubClass(c.edition,k.name,k.subclass)].filter(Boolean);
+    for(const src of sources)for(const f of src.features){
+      const minLv=f.levels[0];
+      if(minLv<=k.level){const fid=k.name+"|"+f.name;
+        out.set(fid,{name:f.name,desc:f.desc+(f.levels.length>1?"\n\n(Gained/improves at levels "+f.levels.join(", ")+".)":""),cls:k.name,minLv,fid});}}}
+  return out;}
+function syncClassFeatures(c){ // additive; returns {added, stale[]}
+  if(!SRD.classes)return {added:0,stale:[],noLib:true};
+  const expected=expectedClassFeatures(c);let added=0;
+  for(const [fid,f] of expected){
+    const ex=c.features.find(x=>x.fid===fid||(x.source==="class"&&x.cls===f.cls&&x.name===f.name));
+    if(!ex){c.features.push({name:f.name,desc:f.desc,uses:0,source:"class",fid,cls:f.cls,minLv:f.minLv});added++;}
+    else{ex.desc=f.desc;ex.minLv=f.minLv;ex.fid=fid;} /* keep SRD text current across edition switches */}
+  const stale=c.features.filter(x=>x.source==="class"&&x.fid&&!expected.has(x.fid));
+  c.features.sort((a,b)=>(a.minLv??99)-(b.minLv??99));
+  return {added,stale};}
+function syncClassFeaturesUI(c,quiet){
+  const r=syncClassFeatures(c);
+  if(r.noLib){if(!quiet)toast("Download the SRD library first (⚙️) for automatic class features");return;}
+  if(r.stale.length&&confirm(`Remove ${r.stale.length} class feature(s) that no longer match your class/level/edition?\n(${r.stale.map(f=>f.name).slice(0,6).join(", ")}${r.stale.length>6?"…":""})`)){
+    c.features=c.features.filter(x=>!r.stale.includes(x));}
+  touch();
+  if(r.added&&!quiet)toast("📜 "+r.added+" class feature"+(r.added>1?"s":"")+" added");}
+function applyClassBasics(c){ // saves, hit die, profs — from lib if present, else built-in tables
+  const main=c.classes[0];if(!main)return;
+  const base=findBaseClass(c.edition,main.name);
+  const saves=(base&&base.saves.length?base.saves:SAVE_PROFS[main.name])||[];
+  ABILITIES.forEach(a=>c.saveProf[a]=saves.includes(a));
+  c.hitDice.die=(base&&base.hitDice)||HIT_DIE[main.name]||"d8";
+  c.hitDice.total=totalLevel(c);
+  const p=CLASS_PROFS[main.name];if(p){c.profs.armor=p.armor;c.profs.weapons=p.weapons;if(p.tools)c.profs.tools=p.tools;}}
+function autoSlotsFromClasses(c){ // returns true if it set anything
+  const single=c.classes.length===1;let cl=0,wl=0;
+  for(const k of c.classes){const t=CASTER_KIND[k.name];
+    if(t==="full")cl+=k.level;
+    else if(t==="half")cl+=single?Math.ceil(k.level/2):Math.floor(k.level/2);
+    else if(t==="pact")wl+=k.level;}
+  const sc=c.spellcasting;
+  if(cl>0){const table=FULL_CASTER_SLOTS[Math.min(20,cl)]||[];
+    for(let l=1;l<=9;l++){sc.slots[l].max=table[l-1]||0;sc.slots[l].used=Math.min(sc.slots[l].used,sc.slots[l].max);}}
+  else if(wl>0){for(let l=1;l<=9;l++)sc.slots[l].max=0;}
+  if(wl>0){sc.pact.max=wl===1?1:wl<11?2:wl<17?3:4;sc.pact.level=Math.min(5,Math.ceil(wl/2));sc.pact.used=Math.min(sc.pact.used,sc.pact.max);}
+  else sc.pact.max=0;
+  const kinds={Warlock:"cha",Bard:"cha",Sorcerer:"cha",Paladin:"cha",Cleric:"wis",Druid:"wis",Ranger:"wis",Wizard:"int",Artificer:"int"};
+  const caster=c.classes.find(k=>CASTER_KIND[k.name]);if(caster)sc.ability=kinds[caster.name]||sc.ability;
+  return cl>0||wl>0;}
+
+/* ================== NEW CHARACTER WIZARD ================== */
+function newCharWizard(){
+  const hasLib=!!SRD.classes;
+  openModal(`<h2>New character ${XBTN}</h2>
+   <label>Name</label><input id="nw_name" placeholder="e.g. Kass Shadowstep"><div class="spacer"></div>
+   <label>Rules edition</label>
+   <div class="row" id="nw_ed">
+     <button class="pill on" data-ed="2014" onclick="nwEd(this)">📕 5e (2014)</button>
+     <button class="pill" data-ed="2024" onclick="nwEd(this)">📗 5e (2024)</button>
+   </div><div class="spacer"></div>
+   <div class="grid2">
+     <div><label>Class</label><select id="nw_class" onchange="nwSubs()"></select></div>
+     <div><label>Subclass</label><select id="nw_sub"></select></div>
+   </div><div class="spacer"></div>
+   <label>Level</label><input id="nw_lv" type="number" min="1" max="20" value="1">
+   ${hasLib?'<p class="dim">Saving throws, proficiencies, spell slots and all class & subclass features up to your level are added automatically. You pick skills next.</p>'
+     :'<p class="dim">⚠️ SRD library not downloaded — saves, skills and slots will still be set automatically, but class features need the library (⚙️ on the home screen).</p>'}
+   <button class="btn" style="width:100%" onclick="nwCreate()">Create character</button>`);
+  nwClasses();}
+function nwEdition(){const b=$("#nw_ed .pill.on");return b?b.dataset.ed:"2014";}
+function nwEd(btn){$$("#nw_ed .pill").forEach(p=>p.classList.remove("on"));btn.classList.add("on");nwClasses();}
+function nwClasses(){const ed=nwEdition();const lib=classLib(ed);
+  const names=lib?lib.filter(x=>!x.sub).map(x=>x.name):CLASSES.filter(x=>x!=="Other"&&x!=="Artificer");
+  $("#nw_class").innerHTML=names.map(n=>`<option>${n}</option>`).join("");
+  nwSubs();}
+function nwSubs(){const ed=nwEdition();const lib=classLib(ed);const cls=$("#nw_class").value;
+  const subs=lib?lib.filter(x=>x.sub===cls).map(x=>x.name):[];
+  $("#nw_sub").innerHTML=`<option value="">— none yet —</option>`+subs.map(n=>`<option>${n}</option>`).join("");}
+function nwCreate(){
+  const c=newCharacter();
+  c.name=$("#nw_name").value.trim()||"New Hero";
+  c.edition=nwEdition();
+  c.classes=[{name:$("#nw_class").value,subclass:$("#nw_sub").value,level:Math.min(20,Math.max(1,+$("#nw_lv").value||1))}];
+  applyClassBasics(c);
+  autoSlotsFromClasses(c);
+  syncClassFeatures(c);
+  db.characters.push(c);save();
+  nwSkillPick(c);}
+function nwSkillPick(c){
+  const cfg=CLASS_SKILL_CHOICES[c.classes[0].name];
+  if(!cfg){closeModal();openChar(c.id);return;}
+  const from=cfg.from==="any"?SKILLS.map(s=>s[0]):cfg.from;
+  openModal(`<h2>Pick ${cfg.n} skills <span class="tag">${esc(c.classes[0].name)}</span></h2>
+   <p class="dim">Your class grants proficiency in ${cfg.n} of these${cfg.from==="any"?" (any skill)":""}. Background skills can be toggled later on the Skills tab.</p>
+   <div id="nwSkills">${from.map(k=>{const s=SKILLS.find(x=>x[0]===k);
+     return `<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;text-transform:none;font-size:15px;color:var(--txt);border-bottom:1px solid var(--line)">
+       <input type="checkbox" value="${k}" onchange="nwSkillLimit(${cfg.n})"> ${s[1]} <span class="dim">(${s[2].toUpperCase()})</span></label>`;}).join("")}</div>
+   <div class="spacer"></div>
+   <button class="btn" style="width:100%" onclick="nwSkillApply('${c.id}')"><span id="nwSkCnt">0</span>/${cfg.n} selected — Done</button>`);}
+function nwSkillLimit(n){const boxes=$$("#nwSkills input");const on=boxes.filter(b=>b.checked);
+  if(on.length>n)on[on.length-1].checked=false;
+  $("#nwSkCnt").textContent=boxes.filter(b=>b.checked).length;}
+function nwSkillApply(id){const c=db.characters.find(x=>x.id===id);
+  $$("#nwSkills input").filter(b=>b.checked).forEach(b=>c.skills[b.value]=Math.max(c.skills[b.value]||0,1));
+  save();closeModal();openChar(c.id);
+  toast("⚔️ "+esc(c.name)+" is ready!");}
 $("#btnImportChar").onclick=()=>$("#fileImport").click();
 $("#fileImport").onchange=e=>{const f=e.target.files[0];if(!f)return;
   const rd=new FileReader();rd.onload=()=>{try{
@@ -358,24 +499,35 @@ function editIdentity(){const c=cur();
    <div><label>Background</label><input id="edBg" value="${esc(c.background)}"></div></div><div class="spacer"></div>
    <div class="grid2"><div><label>Alignment</label><input id="edAlign" value="${esc(c.alignment)}"></div>
    <div><label>XP</label><input id="edXp" type="number" value="${c.xp||0}"></div></div>
-   <hr><h3>Classes</h3><div class="dim" style="margin-bottom:6px">Multiclass supported — add rows.</div>
+   <div class="spacer"></div>
+   <label>Rules edition</label><select id="edEdition">
+     <option value="2014" ${c.edition==="2014"?"selected":""}>📕 5e (2014)</option>
+     <option value="2024" ${c.edition==="2024"?"selected":""}>📗 5e (2024)</option></select>
+   <hr><h3>Classes</h3><div class="dim" style="margin-bottom:6px">Multiclass supported — add rows. Features for new levels are added automatically on save.</div>
    <div id="classRows">${c.classes.map((k,i)=>classRow(k,i)).join("")}</div>
+   <datalist id="subclassList">${(classLib(c.edition)||[]).filter(x=>x.sub).map(x=>`<option value="${esc(x.name)}">`).join("")}</datalist>
    <button class="btn ghost small" onclick="addClassRow()">＋ Add class</button>
    <hr><button class="btn" style="width:100%" onclick="saveIdentity()">Save</button>`);}
 function classRow(k,i){return `<div class="row" style="margin-bottom:8px" data-cls="${i}">
   <select class="clsName">${CLASSES.map(n=>`<option ${n===k.name?"selected":""}>${n}</option>`).join("")}</select>
-  <input class="clsSub" placeholder="Subclass" value="${esc(k.subclass||"")}">
+  <input class="clsSub" placeholder="Subclass" list="subclassList" value="${esc(k.subclass||"")}">
   <input class="clsLv" type="number" min="1" max="20" value="${k.level}" style="max-width:70px">
   <button class="iconbtn" style="flex:none" onclick="this.parentElement.remove()">✕</button></div>`;}
 function addClassRow(){$("#classRows").insertAdjacentHTML("beforeend",classRow({name:"Wizard",subclass:"",level:1},uid()));}
 function saveIdentity(){const c=cur();
   c.name=$("#edName").value.trim()||"Unnamed";c.race=$("#edRace").value.trim();
   c.background=$("#edBg").value.trim();c.alignment=$("#edAlign").value.trim();c.xp=+$("#edXp").value||0;
+  const edSel=$("#edEdition");const editionChanged=edSel&&edSel.value!==c.edition;
+  if(edSel)c.edition=edSel.value;
   const rows=$$("#classRows [data-cls]");
   c.classes=rows.map(r=>({name:r.querySelector(".clsName").value,subclass:r.querySelector(".clsSub").value.trim(),level:Math.min(20,Math.max(1,+r.querySelector(".clsLv").value||1))}));
   if(!c.classes.length)c.classes=[{name:"Fighter",subclass:"",level:1}];
-  const main=c.classes[0];if(HIT_DIE[main.name])c.hitDice.die=HIT_DIE[main.name];
+  const main=c.classes[0];
+  const base=findBaseClass(c.edition,main.name);
+  c.hitDice.die=(base&&base.hitDice)||HIT_DIE[main.name]||c.hitDice.die;
   c.hitDice.total=totalLevel(c);
+  if(c.spellcasting.auto!==false)autoSlotsFromClasses(c);
+  syncClassFeaturesUI(c,false);
   touch();closeModal();renderTab();}
 
 /* ================== MAIN TAB ================== */
@@ -633,6 +785,7 @@ function saveSlots(){const sc=cur().spellcasting;
   if(wl>0){sc.pact.max=wl===1?1:wl<11?2:wl<17?3:4;sc.pact.level=Math.min(5,Math.ceil(wl/2));}
   else{sc.pact.max=Math.max(0,+$("#pactMax").value||0);sc.pact.level=Math.max(1,Math.min(5,+$("#pactLv").value||1));}
   sc.pact.used=Math.min(sc.pact.used,sc.pact.max);
+  sc.auto=false; /* manual config wins; level-ups won't overwrite */
   touch();closeModal();renderTab();}
 function editCustomSpell(i){const sc=cur().spellcasting;
   const s=i>=0?sc.spells[i]:{name:"",level:0,school:"",time:"1 action",range:"",components:"V, S",duration:"",conc:false,ritual:false,prepared:true,desc:"",higher:""};
@@ -716,10 +869,13 @@ function saveItem(i){const inv=cur().inventory;
 function renderFeat(){const c=cur();
   $("#scr-feat").innerHTML=`
   <div class="card">
-    <div class="section-head"><h2 style="margin:0">Features & traits</h2><button class="pill" onclick="editFeature(-1)">＋ Add</button></div>
+    <div class="section-head"><h2 style="margin:0">Features & traits</h2><div>
+      <button class="pill" onclick="syncClassFeaturesUI(cur(),false);renderTab()" title="Re-sync class features">🔄</button>
+      <button class="pill" onclick="editFeature(-1)">＋ Add</button></div></div>
+    ${SRD.classes?"":'<div class="dim" style="margin-bottom:8px">💡 Download the SRD library (⚙️ on home screen) to auto-add class & subclass features.</div>'}
     ${c.features.length?c.features.map((f,i)=>`<div class="li">
       <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-        <div class="li-title">${esc(f.name)}${f.uses?`<div class="li-sub">${f.usesLeft??f.uses}/${f.uses} uses</div>`:""}</div>
+        <div class="li-title">${esc(f.name)} ${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${f.uses?`<div class="li-sub">${f.usesLeft??f.uses}/${f.uses} uses</div>`:""}</div>
         ${f.uses?`<button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>`:""}
         <button class="iconbtn" onclick="event.stopPropagation();editFeature(${i})">✏️</button></div>
       <div class="li-body"><p>${esc(f.desc||"").replace(/\n+/g,"</p><p>")}</p></div></div>`).join(""):'<div class="empty">No features yet — class features, racial traits, feats…</div>'}
@@ -748,11 +904,15 @@ function editFeature(i){const c=cur();
    <button class="btn" onclick="saveFeature(${i})">Save</button></div>`);}
 function saveFeature(i){const c=cur();
   const f={name:$("#ft_name").value.trim()||"Feature",uses:+$("#ft_uses").value||0,desc:$("#ft_desc").value};
+  if(i>=0){const old=c.features[i]; /* keep class-feature identity so resync doesn't duplicate */
+    if(old.fid){f.fid=old.fid;f.cls=old.cls;f.minLv=old.minLv;f.source=old.source;}}
   if(f.uses)f.usesLeft=i>=0?Math.min(c.features[i].usesLeft??f.uses,f.uses):f.uses;
   i>=0?c.features[i]=f:c.features.push(f);touch();closeModal();renderTab();}
 
 /* ================== SRD DATABASE (IndexedDB + Open5e) ================== */
-const SRD={spells:null,items:null}; window.SRD=SRD; // in-memory cache (exposed for debugging)
+const SRD={spells2014:null,spells2024:null,items:null,classes:null}; window.SRD=SRD; // in-memory cache
+function spellsFor(c){return (c&&c.edition==="2024")?SRD.spells2024:SRD.spells2014;}
+function classLib(ed){return SRD.classes?(SRD.classes[ed]||null):null;}
 function idb(){if(typeof indexedDB==="undefined")return Promise.reject(new Error("no idb"));
   return new Promise((res,rej)=>{const rq=indexedDB.open("grimoire_srd",1);
   rq.onupgradeneeded=()=>rq.result.createObjectStore("srd");
@@ -764,23 +924,48 @@ async function idbSet(key,val){const d=await idb();return new Promise((res,rej)=
   const tx=d.transaction("srd","readwrite");tx.objectStore("srd").put(val,key);
   tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
 async function loadSrd(){try{
-  SRD.spells=await idbGet("spells")||null;
-  SRD.items=await idbGet("items")||null;}catch(e){console.warn(e);}}
+  SRD.spells2014=await idbGet("spells2014")||await idbGet("spells")||null;
+  SRD.spells2024=await idbGet("spells2024")||null;
+  SRD.items=await idbGet("items")||null;
+  SRD.classes=await idbGet("classes")||null;}catch(e){console.warn(e);}}
+function prettyCastTime(v,reaction){if(!v)return "";
+  const m={action:"1 action",bonus_action:"1 bonus action",reaction:"1 reaction"};
+  if(m[v])return m[v]+(v==="reaction"&&reaction?" ("+reaction+")":"");
+  const t=v.match(/^(\w+?)_(\d+)$/);if(t)return t[2]+" "+t[1]+(+t[2]>1?"s":"");
+  return v.replace(/_/g," ");}
+function cap(s){s=String(s||"");return s.charAt(0).toUpperCase()+s.slice(1);}
 async function fetchAllPages(url,onProgress){let out=[],page=1;
   while(url){const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);
     const j=await r.json();out=out.concat(j.results);url=j.next;
     if(onProgress)onProgress(out.length,j.count);page++;if(page>60)break;}
   return out;}
 async function syncSrd(){
-  const stat=$("#srdProgress");const set=t=>{if(stat)stat.textContent=t;};
+  const set=t=>{const el=$("#srdProgress");if(el)el.textContent=t;};
   try{
-    set("Downloading spells…");
-    const raw=await fetchAllPages("https://api.open5e.com/v1/spells/?document__slug=wotc-srd&limit=100",(n,t)=>set(`Spells ${n}/${t}…`));
+    set("Downloading 2014 spells…");
+    const raw=await fetchAllPages("https://api.open5e.com/v1/spells/?document__slug=wotc-srd&limit=100",(n,t)=>set(`2014 spells ${n}/${t}…`));
     const spells=raw.map(s=>({name:s.name,level:s.level_int,school:s.school,time:s.casting_time,range:s.range,
       components:s.components+(s.material?" ("+s.material+")":""),duration:s.duration,
       conc:s.requires_concentration,ritual:s.can_be_cast_as_ritual,desc:s.desc,higher:s.higher_level||"",
       classes:(s.dnd_class||"").split(",").map(x=>x.trim()).filter(Boolean)}));
-    await idbSet("spells",spells);SRD.spells=spells;
+    await idbSet("spells2014",spells);SRD.spells2014=spells;
+    set("Downloading 2024 spells…");
+    const raw24=await fetchAllPages("https://api.open5e.com/v2/spells/?document__key=srd-2024&limit=100",(n,t)=>set(`2024 spells ${n}/${t}…`));
+    const spells24=raw24.map(s=>({name:s.name,level:s.level,school:s.school?s.school.name:"",
+      time:prettyCastTime(s.casting_time,s.reaction_condition),range:s.range_text||"",
+      components:[s.verbal?"V":null,s.somatic?"S":null,s.material?"M":null].filter(Boolean).join(", ")+(s.material_specified?" ("+s.material_specified+")":""),
+      duration:cap(s.duration),conc:!!s.concentration,ritual:!!s.ritual,desc:s.desc,higher:s.higher_level||"",
+      classes:(s.classes||[]).map(x=>x.name)}));
+    await idbSet("spells2024",spells24);SRD.spells2024=spells24;
+    set("Downloading class features…");
+    const classes={};
+    for(const ed of ["2014","2024"]){
+      const rawC=await fetchAllPages(`https://api.open5e.com/v2/classes/?document__key=srd-${ed}&limit=100`,(n,t)=>set(`${ed} classes ${n}/${t}…`));
+      classes[ed]=rawC.map(k=>({name:k.name,sub:k.subclass_of?k.subclass_of.name:null,
+        saves:(k.saving_throws||[]).map(s=>s.name.slice(0,3).toLowerCase()),
+        hitDice:k.hit_dice?k.hit_dice.toLowerCase():null,caster:k.caster_type||"NONE",
+        features:(k.features||[]).map(f=>({name:f.name,desc:f.desc||"",levels:(f.gained_at||[]).map(g=>g.level).sort((a,b)=>a-b)})).filter(f=>f.levels.length)}));}
+    await idbSet("classes",classes);SRD.classes=classes;
     set("Downloading weapons & armor…");
     const weapons=await fetchAllPages("https://api.open5e.com/v1/weapons/?document__slug=wotc-srd&limit=100");
     const armor=await fetchAllPages("https://api.open5e.com/v1/armor/?document__slug=wotc-srd&limit=100");
@@ -798,34 +983,39 @@ async function syncSrd(){
     set("");renderSrdStatus();toast("✅ SRD database ready — works offline now");
     if($("#srdMgr"))openSrdManager();
   }catch(e){set("");toast("⚠️ Download failed — check your connection ("+esc(e.message)+")");}}
-function srdCounts(){return {sp:SRD.spells?SRD.spells.length:0,it:SRD.items?SRD.items.length:0};}
-function renderSrdStatus(){const el=$("#srdStatus");if(!el)return;const {sp,it}=srdCounts();
-  el.innerHTML=sp?`🗄️ SRD library: ${sp} spells, ${it} items (offline)`:`<button class="btn ghost small" onclick="syncSrd()">⬇️ Download SRD library (spells & items)</button><span id="srdProgress" style="display:block;margin-top:4px"></span>`;}
-function openSrdManager(){const {sp,it}=srdCounts();
+function srdCounts(){return {sp14:SRD.spells2014?SRD.spells2014.length:0,sp24:SRD.spells2024?SRD.spells2024.length:0,
+  it:SRD.items?SRD.items.length:0,cl:SRD.classes?(SRD.classes["2014"]||[]).length+(SRD.classes["2024"]||[]).length:0};}
+function renderSrdStatus(){const el=$("#srdStatus");if(!el)return;const {sp14,sp24,it,cl}=srdCounts();
+  const complete=sp14&&sp24&&cl;
+  el.innerHTML=complete?`🗄️ SRD library: ${sp14}+${sp24} spells · ${it} items · ${cl} classes (offline)`
+   :`<button class="btn ghost small" onclick="syncSrd()">⬇️ ${sp14?"Update SRD library (adds 2024 rules & class features)":"Download SRD library (spells, items, class features)"}</button><span id="srdProgress" style="display:block;margin-top:4px"></span>`;}
+function openSrdManager(){const {sp14,sp24,it,cl}=srdCounts();
   openModal(`<div id="srdMgr"><h2>SRD database ${XBTN}</h2>
-   <p class="dim">The 5e System Reference Document library (spells, weapons, armor, magic items) is downloaded once from Open5e and stored on your device for offline use.</p>
-   <p>${sp?`✅ ${sp} spells · ${it} items stored`:"❌ Not downloaded yet"}</p>
+   <p class="dim">The 5e System Reference Document library — both the 2014 (SRD 5.1) and 2024 (SRD 5.2) rules — is downloaded once from Open5e and stored on your device for offline use.</p>
+   <p>Spells (2014): ${sp14?"✅ "+sp14:"❌"}<br>Spells (2024): ${sp24?"✅ "+sp24:"❌"}<br>
+   Classes & features (both editions): ${cl?"✅ "+cl:"❌"}<br>Items: ${it?"✅ "+it:"❌"}</p>
    <span id="srdProgress" class="dim"></span><div class="spacer"></div>
-   <button class="btn" style="width:100%" onclick="syncSrd()">${sp?"🔄 Re-download / update":"⬇️ Download now (~3 MB)"}</button>
+   <button class="btn" style="width:100%" onclick="syncSrd()">${sp14?"🔄 Re-download / update":"⬇️ Download now (~4 MB)"}</button>
    <div class="spacer"></div>
    <p class="dim">Data: Open5e API · 5e SRD © Wizards of the Coast, CC-BY-4.0 / OGL.</p></div>`);}
 
 /* ================== SRD BROWSERS ================== */
 let browserFilter={q:"",lv:"all",cls:"all"};
 function openSpellBrowser(){
-  if(!SRD.spells){openModal(`<h2>Spell library ${XBTN}</h2><p class="dim">The SRD library isn't downloaded yet.</p>
+  const lib=spellsFor(cur());
+  if(!lib){openModal(`<h2>Spell library ${XBTN}</h2><p class="dim">The SRD library for this edition isn't downloaded yet.</p>
     <span id="srdProgress" class="dim"></span><div class="spacer"></div>
     <button class="btn" style="width:100%" onclick="syncSrd().then(()=>{closeModal();openSpellBrowser()})">⬇️ Download SRD library</button>`);return;}
   browserFilter={q:"",lv:"all",cls:"all"};
   const classes=["all","Bard","Cleric","Druid","Paladin","Ranger","Sorcerer","Warlock","Wizard"];
-  openModal(`<h2>Spell library ${XBTN}</h2>
-   <div class="searchwrap"><input id="spq" placeholder="🔍 Search ${SRD.spells.length} spells…" oninput="browserFilter.q=this.value;renderSpellResults()">
+  openModal(`<h2>Spell library <span class="tag">${esc(EDITIONS[cur().edition])}</span> ${XBTN}</h2>
+   <div class="searchwrap"><input id="spq" placeholder="🔍 Search ${lib.length} spells…" oninput="browserFilter.q=this.value;renderSpellResults()">
    <div class="filter-pills" id="lvPills">${["all",0,1,2,3,4,5,6,7,8,9].map(l=>`<button class="pill ${l==="all"?"on":""}" onclick="browserFilter.lv='${l}';$$('#lvPills .pill').forEach(p=>p.classList.remove('on'));this.classList.add('on');renderSpellResults()">${l==="all"?"All":l===0?"Cantrip":"Lv "+l}</button>`).join("")}</div>
    <div class="filter-pills" id="clsPills">${classes.map(k=>`<button class="pill ${k==="all"?"on":""}" onclick="browserFilter.cls='${k}';$$('#clsPills .pill').forEach(p=>p.classList.remove('on'));this.classList.add('on');renderSpellResults()">${k==="all"?"All classes":k}</button>`).join("")}</div></div>
    <div id="spResults"></div>`);
   renderSpellResults();}
 function renderSpellResults(){const q=browserFilter.q.toLowerCase();
-  const list=SRD.spells.filter(s=>
+  const list=(spellsFor(cur())||[]).filter(s=>
     (browserFilter.lv==="all"||s.level===+browserFilter.lv)&&
     (browserFilter.cls==="all"||s.classes.some(c=>c.includes(browserFilter.cls)))&&
     (!q||s.name.toLowerCase().includes(q))).slice(0,80);
@@ -837,7 +1027,7 @@ function renderSpellResults(){const q=browserFilter.q.toLowerCase();
     <div class="li-body"><div class="dim">${esc(s.time)} · ${esc(s.range)} · ${esc(s.components)} · ${esc(s.duration)}<br>${esc(s.classes.join(", "))}</div>
       <p>${esc(s.desc).replace(/\n+/g,"</p><p>")}</p>${s.higher?`<p><b>At higher levels.</b> ${esc(s.higher)}</p>`:""}</div>
   </div>`).join("")||'<div class="empty">No matches</div>';}
-function addSrdSpell(name){const s=SRD.spells.find(x=>x.name===name);if(!s)return;
+function addSrdSpell(name){const s=(spellsFor(cur())||[]).find(x=>x.name===name);if(!s)return;
   const sc=cur().spellcasting;
   if(sc.spells.some(x=>x.name===s.name)){toast("Already known");return;}
   sc.spells.push({name:s.name,level:s.level,school:s.school,time:s.time,range:s.range,components:s.components,

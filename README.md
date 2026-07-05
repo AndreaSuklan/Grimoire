@@ -10,8 +10,10 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Spells**: spell slots with tap-to-spend pips, auto-fill by caster level (full/half/third) + Warlock pact magic, "Cast" button that spends the right slot, save DC & spell attack auto-calc, prepared toggles, concentration/ritual tags
 - **Inventory**: quantities, weight & encumbrance, currency (auto gp total), equipped/attuned tracking (warns past 3 attunements)
 - **Features**: limited-use abilities (recharge on long rest), proficiencies, languages, notes
-- **SRD library**: downloads the full 5e SRD once from [Open5e](https://open5e.com) — 319 spells, weapons, armor, ~100 pieces of gear, magic items — then works fully offline. Search & filter by level/class/category, one tap to add to your sheet.
-- Multiclass support; proficiency bonus and hit dice follow total level. Rules kept flexible so 2014 and 2024 rules both work.
+- **SRD library**: downloads the full 5e SRD once from [Open5e](https://open5e.com) — 2014 **and** 2024 spells, class & subclass features, weapons, armor, gear, magic items — then works fully offline. Search & filter, one tap to add to your sheet.
+- **Edition choice per character**: pick 2014 or 2024 rules when creating a character (switchable later in Edit). The spell library and class features follow the character's edition.
+- **Automatic class setup**: the creation wizard sets saving throws, armor/weapon proficiencies, hit die and spell slots from your class, walks you through your class skill choices, and adds every class & subclass feature up to your level. Level up later and new features appear automatically (with cleanup prompts if you change class or edition).
+- Multiclass support; proficiency bonus, hit dice and combined caster slots follow your levels.
 
 ## Get it on your phone (one-time setup, ~10 minutes)
 
