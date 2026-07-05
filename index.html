@@ -433,8 +433,10 @@ function newCharWizard(){
    </div><div class="spacer"></div>
    <div class="grid2">
      <div><label>Class</label><select id="nw_class" onchange="nwSubs()"></select></div>
-     <div><label>Subclass</label><select id="nw_sub"></select></div>
-   </div><div class="spacer"></div>
+     <div><label>Subclass</label><input id="nw_sub" list="nw_subs" placeholder="pick or type any"><datalist id="nw_subs"></datalist></div>
+   </div>
+   <p class="dim" style="margin:4px 0 0">The free SRD includes <b>one</b> subclass per class — suggestions appear as you type. Any other subclass (e.g. Assassin) can be typed freely; its features just won't auto-fill.</p>
+   <div class="spacer"></div>
    <label>Level</label><input id="nw_lv" type="number" min="1" max="20" value="1">
    ${hasLib?'<p class="dim">Saving throws, proficiencies, spell slots and all class & subclass features up to your level are added automatically. You pick skills next.</p>'
      :'<p class="dim">⚠️ SRD library not downloaded — saves, skills and slots will still be set automatically, but class features need the library (⚙️ on the home screen).</p>'}
@@ -448,12 +450,13 @@ function nwClasses(){const ed=nwEdition();const lib=classLib(ed);
   nwSubs();}
 function nwSubs(){const ed=nwEdition();const lib=classLib(ed);const cls=$("#nw_class").value;
   const subs=lib?lib.filter(x=>x.sub===cls).map(x=>x.name):[];
-  $("#nw_sub").innerHTML=`<option value="">— none yet —</option>`+subs.map(n=>`<option>${n}</option>`).join("");}
+  $("#nw_subs").innerHTML=subs.map(n=>`<option value="${esc(n)}">`).join("");
+  $("#nw_sub").placeholder=subs.length?`e.g. ${subs[0]} — or type any`:"pick or type any";}
 function nwCreate(){
   const c=newCharacter();
   c.name=$("#nw_name").value.trim()||"New Hero";
   c.edition=nwEdition();
-  c.classes=[{name:$("#nw_class").value,subclass:$("#nw_sub").value,level:Math.min(20,Math.max(1,+$("#nw_lv").value||1))}];
+  c.classes=[{name:$("#nw_class").value,subclass:$("#nw_sub").value.trim(),level:Math.min(20,Math.max(1,+$("#nw_lv").value||1))}];
   applyClassBasics(c);
   autoSlotsFromClasses(c);
   syncClassFeatures(c);
@@ -912,7 +915,21 @@ function saveFeature(i){const c=cur();
 /* ================== SRD DATABASE (IndexedDB + Open5e) ================== */
 const SRD={spells2014:null,spells2024:null,items:null,classes:null}; window.SRD=SRD; // in-memory cache
 function spellsFor(c){return (c&&c.edition==="2024")?SRD.spells2024:SRD.spells2014;}
-function classLib(ed){return SRD.classes?(SRD.classes[ed]||null):null;}
+function classLib(ed){if(!SRD.classes)return null;const l=SRD.classes[ed];return (l&&l.length)?l:null;}
+function build2014Classes(feats){ /* 5e-bits feature list -> class library */
+  const map=new Map();
+  for(const f of feats){
+    if(f.parent)continue; /* skip choice options like individual Fighting Styles */
+    const cls=f.class?f.class.name:null;if(!cls||typeof f.level!=="number")continue;
+    const subName=f.subclass?f.subclass.name:null;
+    const key=cls+"|"+(subName||"");
+    if(!map.has(key))map.set(key,{name:subName||cls,sub:subName?cls:null,saves:[],hitDice:null,caster:"NONE",feats:new Map()});
+    const e=map.get(key);
+    const desc=Array.isArray(f.desc)?f.desc.join("\n"):String(f.desc||"");
+    if(e.feats.has(f.name)){const x=e.feats.get(f.name);if(!x.levels.includes(f.level))x.levels.push(f.level);}
+    else e.feats.set(f.name,{name:f.name,desc,levels:[f.level]});}
+  return [...map.values()].map(e=>({name:e.name,sub:e.sub,saves:e.saves,hitDice:e.hitDice,caster:e.caster,
+    features:[...e.feats.values()].map(f=>({name:f.name,desc:f.desc,levels:f.levels.sort((a,b)=>a-b)}))}));}
 function idb(){if(typeof indexedDB==="undefined")return Promise.reject(new Error("no idb"));
   return new Promise((res,rej)=>{const rq=indexedDB.open("grimoire_srd",1);
   rq.onupgradeneeded=()=>rq.result.createObjectStore("srd");
@@ -957,14 +974,21 @@ async function syncSrd(){
       duration:cap(s.duration),conc:!!s.concentration,ritual:!!s.ritual,desc:s.desc,higher:s.higher_level||"",
       classes:(s.classes||[]).map(x=>x.name)}));
     await idbSet("spells2024",spells24);SRD.spells2024=spells24;
-    set("Downloading class features…");
+    set("Downloading 2024 class features…");
     const classes={};
-    for(const ed of ["2014","2024"]){
-      const rawC=await fetchAllPages(`https://api.open5e.com/v2/classes/?document__key=srd-${ed}&limit=100`,(n,t)=>set(`${ed} classes ${n}/${t}…`));
-      classes[ed]=rawC.map(k=>({name:k.name,sub:k.subclass_of?k.subclass_of.name:null,
-        saves:(k.saving_throws||[]).map(s=>s.name.slice(0,3).toLowerCase()),
-        hitDice:k.hit_dice?k.hit_dice.toLowerCase():null,caster:k.caster_type||"NONE",
-        features:(k.features||[]).map(f=>({name:f.name,desc:f.desc||"",levels:(f.gained_at||[]).map(g=>g.level).sort((a,b)=>a-b)})).filter(f=>f.levels.length)}));}
+    const rawC=await fetchAllPages("https://api.open5e.com/v2/classes/?document__key=srd-2024&limit=100",(n,t)=>set(`2024 classes ${n}/${t}…`));
+    classes["2024"]=rawC.map(k=>({name:k.name,sub:k.subclass_of?k.subclass_of.name:null,
+      saves:(k.saving_throws||[]).map(s=>s.name.slice(0,3).toLowerCase()),
+      hitDice:k.hit_dice?k.hit_dice.toLowerCase():null,caster:k.caster_type||"NONE",
+      features:(k.features||[]).map(f=>({name:f.name,desc:f.desc||"",levels:(f.gained_at||[]).map(g=>g.level).sort((a,b)=>a-b)})).filter(f=>f.levels.length)}));
+    /* Open5e v2 has no 2014 class data — use the 5e-bits SRD database (the JSON behind dnd5eapi.co) */
+    set("Downloading 2014 class features…");
+    let feats14=null;
+    for(const u of ["https://raw.githubusercontent.com/5e-bits/5e-database/main/src/2014/5e-SRD-Features.json",
+                    "https://cdn.jsdelivr.net/gh/5e-bits/5e-database@main/src/2014/5e-SRD-Features.json"]){
+      try{const r=await fetch(u);if(r.ok){feats14=await r.json();if(Array.isArray(feats14))break;feats14=null;}}catch(err){}}
+    if(!feats14)throw new Error("2014 class features download failed");
+    classes["2014"]=build2014Classes(feats14);
     await idbSet("classes",classes);SRD.classes=classes;
     set("Downloading weapons & armor…");
     const weapons=await fetchAllPages("https://api.open5e.com/v1/weapons/?document__slug=wotc-srd&limit=100");
@@ -984,20 +1008,21 @@ async function syncSrd(){
     if($("#srdMgr"))openSrdManager();
   }catch(e){set("");toast("⚠️ Download failed — check your connection ("+esc(e.message)+")");}}
 function srdCounts(){return {sp14:SRD.spells2014?SRD.spells2014.length:0,sp24:SRD.spells2024?SRD.spells2024.length:0,
-  it:SRD.items?SRD.items.length:0,cl:SRD.classes?(SRD.classes["2014"]||[]).length+(SRD.classes["2024"]||[]).length:0};}
-function renderSrdStatus(){const el=$("#srdStatus");if(!el)return;const {sp14,sp24,it,cl}=srdCounts();
-  const complete=sp14&&sp24&&cl;
-  el.innerHTML=complete?`🗄️ SRD library: ${sp14}+${sp24} spells · ${it} items · ${cl} classes (offline)`
-   :`<button class="btn ghost small" onclick="syncSrd()">⬇️ ${sp14?"Update SRD library (adds 2024 rules & class features)":"Download SRD library (spells, items, class features)"}</button><span id="srdProgress" style="display:block;margin-top:4px"></span>`;}
-function openSrdManager(){const {sp14,sp24,it,cl}=srdCounts();
+  it:SRD.items?SRD.items.length:0,
+  cl14:SRD.classes?(SRD.classes["2014"]||[]).length:0,cl24:SRD.classes?(SRD.classes["2024"]||[]).length:0};}
+function renderSrdStatus(){const el=$("#srdStatus");if(!el)return;const {sp14,sp24,it,cl14,cl24}=srdCounts();
+  const complete=sp14&&sp24&&cl14&&cl24;
+  el.innerHTML=complete?`🗄️ SRD library: ${sp14}+${sp24} spells · ${it} items · ${cl14}+${cl24} classes (offline)`
+   :`<button class="btn ghost small" onclick="syncSrd()">⬇️ ${sp14?"Update SRD library (adds missing class features)":"Download SRD library (spells, items, class features)"}</button><span id="srdProgress" style="display:block;margin-top:4px"></span>`;}
+function openSrdManager(){const {sp14,sp24,it,cl14,cl24}=srdCounts();
   openModal(`<div id="srdMgr"><h2>SRD database ${XBTN}</h2>
-   <p class="dim">The 5e System Reference Document library — both the 2014 (SRD 5.1) and 2024 (SRD 5.2) rules — is downloaded once from Open5e and stored on your device for offline use.</p>
+   <p class="dim">The 5e System Reference Document library — both the 2014 (SRD 5.1) and 2024 (SRD 5.2) rules — is downloaded once and stored on your device for offline use.</p>
    <p>Spells (2014): ${sp14?"✅ "+sp14:"❌"}<br>Spells (2024): ${sp24?"✅ "+sp24:"❌"}<br>
-   Classes & features (both editions): ${cl?"✅ "+cl:"❌"}<br>Items: ${it?"✅ "+it:"❌"}</p>
+   Classes & features (2014): ${cl14?"✅ "+cl14:"❌"}<br>Classes & features (2024): ${cl24?"✅ "+cl24:"❌"}<br>Items: ${it?"✅ "+it:"❌"}</p>
    <span id="srdProgress" class="dim"></span><div class="spacer"></div>
    <button class="btn" style="width:100%" onclick="syncSrd()">${sp14?"🔄 Re-download / update":"⬇️ Download now (~4 MB)"}</button>
    <div class="spacer"></div>
-   <p class="dim">Data: Open5e API · 5e SRD © Wizards of the Coast, CC-BY-4.0 / OGL.</p></div>`);}
+   <p class="dim">Data: Open5e API & 5e-bits SRD database · 5e SRD © Wizards of the Coast, CC-BY-4.0 / OGL.</p></div>`);}
 
 /* ================== SRD BROWSERS ================== */
 let browserFilter={q:"",lv:"all",cls:"all"};

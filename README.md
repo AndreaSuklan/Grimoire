@@ -48,5 +48,6 @@ Characters are stored on-device (localStorage), the SRD library in IndexedDB. No
 
 ## Credits
 
-- SRD content via the [Open5e API](https://api.open5e.com) — 5e SRD © Wizards of the Coast, licensed CC-BY-4.0 / OGL 1.0a.
+- SRD content via the [Open5e API](https://api.open5e.com) (2024 rules, spells, items) and the [5e-bits SRD database](https://github.com/5e-bits/5e-database) (2014 class features) — 5e SRD © Wizards of the Coast, licensed CC-BY-4.0 / OGL 1.0a.
+- Note: the free SRD legally includes **one subclass per class** (Thief, Champion, Life Domain…). Other subclasses can be typed freely; add their features manually.
 - App: vanilla HTML/JS, no dependencies, single file.
