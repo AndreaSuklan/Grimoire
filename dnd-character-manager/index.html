@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16121f">
+<title>Grimoire — D&D Character Manager</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#16121f; --bg2:#1e1830; --card:#251d3a; --card2:#2e2547;
+  --line:#3a2f5c; --txt:#eae4f5; --dim:#9d92bd; --accent:#a06cd5; --accent2:#c39bd3;
+  --gold:#e0b45c; --red:#e35d6a; --green:#5dc98a; --blue:#5da9e3;
+  --radius:14px; --nav-h:60px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:16px}
+body{padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 8px)}
+button{font-family:inherit;color:inherit;border:none;background:none;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px;color:var(--txt);background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;outline:none;width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input[type=checkbox]{width:auto;accent-color:var(--accent)}
+label{font-size:12px;color:var(--dim);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
+h1{font-size:22px;margin:0} h2{font-size:17px;margin:0 0 10px} h3{font-size:15px;margin:0}
+.screen{display:none;padding:14px;max-width:760px;margin:0 auto}
+.screen.active{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;align-items:center}
+.row>*{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.btn{background:var(--accent);color:#fff;border-radius:10px;padding:10px 16px;font-weight:600;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:var(--card2);color:var(--txt);border:1px solid var(--line)}
+.btn.danger{background:var(--red)}
+.btn.small{padding:6px 10px;font-size:13px;border-radius:8px}
+.btn.gold{background:var(--gold);color:#241c10}
+.pill{display:inline-flex;align-items:center;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:13px;cursor:pointer;user-select:none}
+.pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.dim{color:var(--dim);font-size:13px}
+.center{text-align:center}
+.spacer{height:8px}
+hr{border:none;border-top:1px solid var(--line);margin:12px 0}
+
+/* Top bar */
+#topbar{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,var(--bg2),rgba(30,24,48,.96));backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:10px 14px calc(10px);display:flex;align-items:center;gap:10px}
+#topbar .title{flex:1;min-width:0}
+#topbar .title .nm{font-weight:700;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#topbar .title .sub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{width:38px;height:38px;border-radius:10px;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:17px;flex:none}
+
+/* Bottom nav */
+#nav{position:fixed;bottom:0;left:0;right:0;z-index:50;height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg2);border-top:1px solid var(--line);display:none;grid-template-columns:repeat(5,1fr)}
+#nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10.5px;color:var(--dim);letter-spacing:.02em}
+#nav button .ic{font-size:20px;line-height:1}
+#nav button.on{color:var(--accent2)}
+
+/* Ability blocks */
+.abl-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.abl{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px 2px;text-align:center;cursor:pointer}
+.abl .a-name{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.abl .a-mod{font-size:19px;font-weight:700;color:var(--accent2)}
+.abl .a-score{font-size:11px;color:var(--dim)}
+@media(max-width:430px){.abl-grid{grid-template-columns:repeat(3,1fr)}}
+
+/* HP */
+.hp-wrap{display:flex;align-items:center;gap:10px}
+.hp-num{font-size:30px;font-weight:800;min-width:110px;text-align:center}
+.hp-num .mx{font-size:16px;color:var(--dim);font-weight:600}
+.hpbar{height:8px;background:var(--bg2);border-radius:99px;overflow:hidden;margin-top:6px}
+.hpbar>div{height:100%;background:var(--green);border-radius:99px;transition:width .25s}
+.stepbtn{width:44px;height:44px;border-radius:12px;background:var(--card2);border:1px solid var(--line);font-size:22px;font-weight:700;flex:none}
+.statbox{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center}
+.statbox .v{font-size:20px;font-weight:700}
+.statbox .l{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+
+/* skill rows */
+.skrow{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line)}
+.skrow:last-child{border-bottom:none}
+.skrow .prof{width:20px;height:20px;border-radius:50%;border:2px solid var(--dim);flex:none;cursor:pointer;position:relative}
+.skrow .prof.p1{background:var(--accent);border-color:var(--accent)}
+.skrow .prof.p2{background:var(--gold);border-color:var(--gold)}
+.skrow .nm{flex:1;font-size:15px}
+.skrow .ab{font-size:11px;color:var(--dim);text-transform:uppercase;width:32px}
+.skrow .md{font-weight:700;font-size:16px;width:44px;text-align:right;color:var(--accent2);cursor:pointer;padding:4px;border-radius:8px}
+.skrow .md:active{background:var(--card2)}
+
+/* pips */
+.pips{display:flex;gap:6px;flex-wrap:wrap}
+.pip{width:22px;height:22px;border-radius:50%;border:2px solid var(--accent);cursor:pointer}
+.pip.used{background:var(--line);border-color:var(--line)}
+.pip.full{background:var(--accent)}
+
+/* list items */
+.li{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.li .li-head{display:flex;align-items:center;gap:8px;cursor:pointer}
+.li .li-title{flex:1;font-weight:600;min-width:0}
+.li .li-sub{font-size:12px;color:var(--dim)}
+.li .li-body{display:none;margin-top:10px;font-size:14px;color:var(--txt)}
+.li.open .li-body{display:block}
+.li .li-body p{margin:6px 0}
+.tag{font-size:10.5px;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:2px 6px;color:var(--dim);white-space:nowrap}
+.tag.c{color:var(--gold);border-color:var(--gold)}
+.tag.r{color:var(--blue);border-color:var(--blue)}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:flex-end;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;max-width:760px;max-height:88vh;overflow-y:auto;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:760px){.modal-bg{align-items:center}.modal{border-radius:18px}}
+.modal h2{display:flex;justify-content:space-between;align-items:center}
+
+/* toast */
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 20px);z-index:200;background:var(--card2);border:1px solid var(--accent);border-radius:14px;padding:12px 18px;font-size:15px;display:none;max-width:90vw;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+#toast.show{display:block;animation:pop .18s ease-out}
+@keyframes pop{from{transform:translateX(-50%) scale(.9);opacity:0}}
+#toast .big{font-size:26px;font-weight:800;color:var(--accent2)}
+
+/* character list */
+.charcard{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:10px;cursor:pointer}
+.charcard .avatar{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#fff;flex:none}
+.charcard .info{flex:1;min-width:0}
+.charcard .cnm{font-weight:700;font-size:17px}
+.charcard .csub{font-size:13px;color:var(--dim)}
+
+.searchwrap{position:sticky;top:0;background:var(--card);padding:6px 0;z-index:5}
+.dice-adv{display:flex;gap:6px;margin-top:8px}
+.cond-grid{display:flex;flex-wrap:wrap;gap:6px}
+.slot-lv{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.slot-lv:last-child{border:none}
+.slot-lv .lv{width:56px;font-weight:700;font-size:14px}
+.death-dots{display:flex;gap:8px}
+.ddot{width:24px;height:24px;border-radius:50%;border:2px solid var(--dim);cursor:pointer}
+.ddot.s{background:var(--green);border-color:var(--green)}
+.ddot.f{background:var(--red);border-color:var(--red)}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.empty{color:var(--dim);text-align:center;padding:20px 10px;font-size:14px}
+.warn{color:var(--red)} .good{color:var(--green)}
+textarea{min-height:80px;resize:vertical}
+.filter-pills{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;scrollbar-width:none}
+.filter-pills::-webkit-scrollbar{display:none}
+</style>
+</head>
+<body>
+
+<div id="topbar" style="display:none">
+  <button class="iconbtn" id="btnBack" title="Characters">👥</button>
+  <div class="title"><div class="nm" id="tbName"></div><div class="sub" id="tbSub"></div></div>
+  <button class="iconbtn" id="btnDice" title="Dice roller">🎲</button>
+  <button class="iconbtn" id="btnMenu" title="Menu">⋮</button>
+</div>
+
+<!-- ============ CHARACTER LIST ============ -->
+<div class="screen" id="scr-list">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 16px">
+    <h1>🐉 Grimoire</h1>
+    <button class="iconbtn" id="btnSettings" title="App settings">⚙️</button>
+  </div>
+  <div id="charList"></div>
+  <button class="btn" style="width:100%" id="btnNewChar">＋ New character</button>
+  <div class="spacer"></div>
+  <button class="btn ghost" style="width:100%" id="btnImportChar">📥 Import character (JSON)</button>
+  <input type="file" id="fileImport" accept=".json,application/json" style="display:none">
+  <p class="dim center" id="srdStatus" style="margin-top:18px"></p>
+</div>
+
+<!-- ============ MAIN TAB ============ -->
+<div class="screen" id="scr-main"></div>
+<!-- ============ SKILLS TAB ============ -->
+<div class="screen" id="scr-skills"></div>
+<!-- ============ SPELLS TAB ============ -->
+<div class="screen" id="scr-spells"></div>
+<!-- ============ INVENTORY TAB ============ -->
+<div class="screen" id="scr-inv"></div>
+<!-- ============ FEATURES TAB ============ -->
+<div class="screen" id="scr-feat"></div>
+
+<nav id="nav">
+  <button data-tab="main"><span class="ic">🛡️</span>Main</button>
+  <button data-tab="skills"><span class="ic">🎯</span>Skills</button>
+  <button data-tab="spells"><span class="ic">✨</span>Spells</button>
+  <button data-tab="inv"><span class="ic">🎒</span>Items</button>
+  <button data-tab="feat"><span class="ic">📜</span>Features</button>
+</nav>
+
+<div id="toast"></div>
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalBox"></div></div>
+
+<script>
+"use strict";
+/* ================== CONSTANTS ================== */
+const ABILITIES=["str","dex","con","int","wis","cha"];
+const ABL_NAMES={str:"Strength",dex:"Dexterity",con:"Constitution",int:"Intelligence",wis:"Wisdom",cha:"Charisma"};
+const SKILLS=[
+ ["acrobatics","Acrobatics","dex"],["animal","Animal Handling","wis"],["arcana","Arcana","int"],
+ ["athletics","Athletics","str"],["deception","Deception","cha"],["history","History","int"],
+ ["insight","Insight","wis"],["intimidation","Intimidation","cha"],["investigation","Investigation","int"],
+ ["medicine","Medicine","wis"],["nature","Nature","int"],["perception","Perception","wis"],
+ ["performance","Performance","cha"],["persuasion","Persuasion","cha"],["religion","Religion","int"],
+ ["sleight","Sleight of Hand","dex"],["stealth","Stealth","dex"],["survival","Survival","wis"]];
+const CONDITIONS=["Blinded","Charmed","Deafened","Frightened","Grappled","Incapacitated","Invisible","Paralyzed","Petrified","Poisoned","Prone","Restrained","Stunned","Unconscious"];
+const CLASSES=["Artificer","Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard","Other"];
+const HIT_DIE={Barbarian:"d12",Fighter:"d10",Paladin:"d10",Ranger:"d10",Artificer:"d8",Bard:"d8",Cleric:"d8",Druid:"d8",Monk:"d8",Rogue:"d8",Warlock:"d8",Sorcerer:"d6",Wizard:"d6",Other:"d8"};
+const FULL_CASTER_SLOTS={1:[2],2:[3],3:[4,2],4:[4,3],5:[4,3,2],6:[4,3,3],7:[4,3,3,1],8:[4,3,3,2],9:[4,3,3,3,1],10:[4,3,3,3,2],11:[4,3,3,3,2,1],12:[4,3,3,3,2,1],13:[4,3,3,3,2,1,1],14:[4,3,3,3,2,1,1],15:[4,3,3,3,2,1,1,1],16:[4,3,3,3,2,1,1,1],17:[4,3,3,3,2,1,1,1,1],18:[4,3,3,3,3,1,1,1,1],19:[4,3,3,3,3,2,1,1,1],20:[4,3,3,3,3,2,2,1,1]};
+const XP_THRESHOLDS=[0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000];
+const AVATAR_COLORS=["#a06cd5","#e35d6a","#5dc98a","#5da9e3","#e0b45c","#d569b0","#6cd5c4","#e08a5c"];
+/* Common adventuring gear: [name, cost, weight lb] */
+const GEAR=[["Abacus","2 gp",2],["Acid (vial)","25 gp",1],["Alchemist's fire (flask)","50 gp",1],["Arrows (20)","1 gp",1],["Antitoxin (vial)","50 gp",0],["Backpack","2 gp",5],["Ball bearings (bag of 1,000)","1 gp",2],["Bedroll","1 gp",7],["Bell","1 gp",0],["Blanket","5 sp",3],["Bolts, crossbow (20)","1 gp",1.5],["Book","25 gp",5],["Bottle, glass","2 gp",2],["Caltrops (bag of 20)","1 gp",2],["Candle","1 cp",0],["Chain (10 feet)","5 gp",10],["Chalk (1 piece)","1 cp",0],["Climber's kit","25 gp",12],["Clothes, common","5 sp",3],["Clothes, fine","15 gp",6],["Clothes, traveler's","2 gp",4],["Component pouch","25 gp",2],["Crowbar","2 gp",5],["Flask or tankard","2 cp",1],["Grappling hook","2 gp",4],["Hammer","1 gp",3],["Healer's kit","5 gp",3],["Holy symbol","5 gp",1],["Holy water (flask)","25 gp",1],["Hourglass","25 gp",1],["Ink (1 ounce bottle)","10 gp",0],["Ink pen","2 cp",0],["Lantern, bullseye","10 gp",2],["Lantern, hooded","5 gp",2],["Lock","10 gp",1],["Magnifying glass","100 gp",0],["Manacles","2 gp",6],["Mess kit","2 sp",1],["Mirror, steel","5 gp",0.5],["Oil (flask)","1 sp",1],["Paper (one sheet)","2 sp",0],["Parchment (one sheet)","1 sp",0],["Perfume (vial)","5 gp",0],["Piton","5 cp",0.25],["Poison, basic (vial)","100 gp",0],["Pole (10-foot)","5 cp",7],["Pot, iron","2 gp",10],["Potion of healing","50 gp",0.5],["Pouch","5 sp",1],["Quiver","1 gp",1],["Rations (1 day)","5 sp",2],["Rope, hempen (50 feet)","1 gp",10],["Rope, silk (50 feet)","10 gp",5],["Sack","1 cp",0.5],["Shovel","2 gp",5],["Signal whistle","5 cp",0],["Spellbook","50 gp",3],["Spikes, iron (10)","1 gp",5],["Spyglass","1,000 gp",1],["Tent, two-person","2 gp",20],["Thieves' tools","25 gp",1],["Tinderbox","5 sp",1],["Torch","1 cp",1],["Waterskin","2 sp",5],["Whetstone","1 cp",1]];
+
+/* ================== HELPERS ================== */
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const mod=v=>Math.floor((v-10)/2);
+const fmt=n=>n>=0?"+"+n:String(n);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const jstr=s=>esc(String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'")); /* safe string for inline JS in attributes */
+function toast(html,ms=2200){const t=$("#toast");t.innerHTML=html;t.classList.add("show");clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove("show"),ms);}
+function rollDie(n){return 1+Math.floor(Math.random()*n);}
+function rollExpr(expr){ /* "2d6+3" etc */
+  let total=0,parts=[],m,re=/([+-]?)\s*(?:(\d*)d(\d+)|(\d+))/g,any=false;
+  while((m=re.exec(expr))!==null){ any=true; const sign=m[1]==="-"?-1:1;
+    if(m[3]){const cnt=parseInt(m[2]||"1"),die=parseInt(m[3]);let s=0,rs=[];for(let i=0;i<cnt;i++){const r=rollDie(die);s+=r;rs.push(r);}total+=sign*s;parts.push((sign<0?"-":"")+cnt+"d"+die+" ["+rs.join(",")+"]");}
+    else{const v=parseInt(m[4]);total+=sign*v;parts.push((sign<0?"-":"+")+v);}}
+  return any?{total,detail:parts.join(" ")}:null;}
+/* ================== STATE & STORAGE ================== */
+const STORE_KEY="grimoire_v1";
+let db={characters:[],currentId:null};
+let curTab="main";
+function save(){localStorage.setItem(STORE_KEY,JSON.stringify(db));}
+function load(){try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&d.characters)db=d;}catch(e){}}
+function cur(){return db.characters.find(c=>c.id===db.currentId)||null;}
+
+function newCharacter(){
+  return {id:uid(),name:"New Hero",race:"",background:"",alignment:"",xp:0,
+    classes:[{name:"Fighter",subclass:"",level:1}],
+    abilities:{str:10,dex:10,con:10,int:10,wis:10,cha:10},
+    saveProf:{str:false,dex:false,con:false,int:false,wis:false,cha:false},
+    skills:Object.fromEntries(SKILLS.map(s=>[s[0],0])), jack:false,
+    hp:{max:10,current:10,temp:0}, hitDice:{die:"d10",total:1,used:0},
+    ac:10, initMisc:0, speed:30,
+    deathSaves:{s:0,f:0}, inspiration:false, conditions:[], exhaustion:0,
+    attacks:[],
+    spellcasting:{ability:"int",slots:Object.fromEntries([1,2,3,4,5,6,7,8,9].map(l=>[l,{max:0,used:0}])),pact:{level:1,max:0,used:0},spells:[]},
+    inventory:{items:[],currency:{cp:0,sp:0,ep:0,gp:0,pp:0}},
+    features:[], profs:{armor:"",weapons:"",tools:"",languages:""}, notes:"",
+    color:AVATAR_COLORS[Math.floor(Math.random()*AVATAR_COLORS.length)], updated:Date.now()};
+}
+function totalLevel(c){return c.classes.reduce((a,k)=>a+(+k.level||0),0)||1;}
+function profBonus(c){return Math.ceil(totalLevel(c)/4)+1;}
+function classStr(c){return c.classes.map(k=>k.name+(k.subclass?" ("+k.subclass+")":"")+" "+k.level).join(" / ");}
+function skillMod(c,key){const [,,ab]=SKILLS.find(s=>s[0]===key);const p=c.skills[key]||0;
+  let b=mod(c.abilities[ab])+(p>=1?profBonus(c):0)+(p===2?profBonus(c):0);
+  if(p===0&&c.jack)b+=Math.floor(profBonus(c)/2); return b;}
+function saveMod(c,ab){return mod(c.abilities[ab])+(c.saveProf[ab]?profBonus(c):0);}
+function touch(){const c=cur();if(c)c.updated=Date.now();save();}
+
+/* ================== NAVIGATION ================== */
+function showList(){db.currentId=null;save();
+  $("#topbar").style.display="none";$("#nav").style.display="none";
+  $$(".screen").forEach(s=>s.classList.remove("active"));$("#scr-list").classList.add("active");
+  renderList();}
+function openChar(id){db.currentId=id;save();$("#topbar").style.display="flex";$("#nav").style.display="grid";setTab(curTab||"main");}
+function setTab(tab){curTab=tab;
+  $$(".screen").forEach(s=>s.classList.remove("active"));
+  $("#scr-"+tab).classList.add("active");
+  $$("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
+  renderTab();window.scrollTo(0,0);}
+function renderTab(){const c=cur();if(!c)return;
+  $("#tbName").textContent=c.name;
+  $("#tbSub").textContent=classStr(c)+" · Lv "+totalLevel(c)+" · PB "+fmt(profBonus(c));
+  ({main:renderMain,skills:renderSkills,spells:renderSpells,inv:renderInv,feat:renderFeat})[curTab]();}
+$$("#nav button").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+$("#btnBack").onclick=showList;
+
+/* ================== MODAL ================== */
+function openModal(html){$("#modalBox").innerHTML=html;$("#modalBg").classList.add("open");}
+function closeModal(){$("#modalBg").classList.remove("open");}
+$("#modalBg").onclick=e=>{if(e.target.id==="modalBg")closeModal();};
+const XBTN='<button class="iconbtn" onclick="closeModal()">✕</button>';
+
+/* ================== DICE ROLLER ================== */
+let lastRoll=null;
+function d20Roll(label,modifier){
+  const r1=rollDie(20),r2=rollDie(20);lastRoll={label,modifier,r1,r2};
+  showRoll("normal");}
+function showRoll(adv){
+  const {label,modifier,r1,r2}=lastRoll;
+  let use=r1;if(adv==="adv")use=Math.max(r1,r2);if(adv==="dis")use=Math.min(r1,r2);
+  const crit=use===20?' <span class="good">CRIT!</span>':use===1?' <span class="warn">Nat 1</span>':"";
+  toast(`<div><b>${esc(label)}</b>${crit}</div><div class="big">${use+modifier}</div>
+    <div class="dim">d20: ${adv==="normal"?use:r1+" / "+r2} ${fmt(modifier)}</div>
+    <div class="dice-adv">
+      <button class="pill ${adv==="normal"?"on":""}" onclick="showRoll('normal')">Normal</button>
+      <button class="pill ${adv==="adv"?"on":""}" onclick="showRoll('adv')">Advantage</button>
+      <button class="pill ${adv==="dis"?"on":""}" onclick="showRoll('dis')">Disadv.</button>
+    </div>`,6000);}
+function damageRoll(label,expr){const r=rollExpr(expr);
+  if(!r){toast("Can't parse dice: "+esc(expr));return;}
+  toast(`<div><b>${esc(label)}</b></div><div class="big">${r.total}</div><div class="dim">${esc(r.detail)}</div>`,5000);}
+$("#btnDice").onclick=()=>{
+  openModal(`<h2>Dice roller ${XBTN}</h2>
+    <div class="grid3">${[4,6,8,10,12,20].map(d=>`<button class="btn ghost" onclick="damageRoll('d${d}','1d${d}')">d${d}</button>`).join("")}</div>
+    <div class="spacer"></div><label>Custom (e.g. 2d6+3)</label>
+    <div class="row"><input id="diceExpr" placeholder="2d6+3">
+    <button class="btn" style="flex:none" onclick="damageRoll('Custom',$('#diceExpr').value)">Roll</button></div>`);};
+
+/* ================== CHARACTER LIST ================== */
+function renderList(){
+  const wrap=$("#charList");
+  if(!db.characters.length){wrap.innerHTML='<div class="empty">No characters yet.<br>Create your first hero!</div>';}
+  else{
+    wrap.innerHTML=db.characters.sort((a,b)=>b.updated-a.updated).map(c=>`
+    <div class="charcard" onclick="openChar('${c.id}')">
+      <div class="avatar" style="background:${c.color}">${esc((c.name||"?")[0].toUpperCase())}</div>
+      <div class="info"><div class="cnm">${esc(c.name)}</div>
+      <div class="csub">${esc(c.race||"")} ${esc(classStr(c))} · Level ${totalLevel(c)}</div>
+      <div class="csub">HP ${c.hp.current}/${c.hp.max} · AC ${c.ac}</div></div>
+      <button class="iconbtn" onclick="event.stopPropagation();charMenu('${c.id}')">⋮</button>
+    </div>`).join("");}
+  renderSrdStatus();}
+function charMenu(id){const c=db.characters.find(x=>x.id===id);
+  openModal(`<h2>${esc(c.name)} ${XBTN}</h2>
+    <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="exportChar('${id}')">📤 Export JSON</button>
+    <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="duplicateChar('${id}')">📄 Duplicate</button>
+    <button class="btn danger" style="width:100%" onclick="deleteChar('${id}')">🗑️ Delete</button>`);}
+function deleteChar(id){if(!confirm("Delete this character permanently?"))return;
+  db.characters=db.characters.filter(c=>c.id!==id);save();closeModal();renderList();}
+function duplicateChar(id){const c=db.characters.find(x=>x.id===id);
+  const copy=JSON.parse(JSON.stringify(c));copy.id=uid();copy.name=c.name+" (copy)";copy.updated=Date.now();
+  db.characters.push(copy);save();closeModal();renderList();}
+function exportChar(id){const c=db.characters.find(x=>x.id===id);
+  const blob=new Blob([JSON.stringify(c,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=(c.name||"character").replace(/\W+/g,"_")+".json";a.click();closeModal();}
+$("#btnNewChar").onclick=()=>{const c=newCharacter();db.characters.push(c);save();openChar(c.id);editIdentity();};
+$("#btnImportChar").onclick=()=>$("#fileImport").click();
+$("#fileImport").onchange=e=>{const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();rd.onload=()=>{try{
+    const c=JSON.parse(rd.result);if(!c.name||!c.abilities)throw 0;
+    c.id=uid();c.updated=Date.now();db.characters.push(c);save();renderList();toast("Imported "+esc(c.name));
+  }catch(err){toast("Invalid character file");}};rd.readAsText(f);e.target.value="";};
+$("#btnMenu").onclick=()=>{const c=cur();
+  openModal(`<h2>${esc(c.name)} ${XBTN}</h2>
+    <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();editIdentity()">✏️ Edit character & classes</button>
+    <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="exportChar('${c.id}')">📤 Export JSON</button>
+    <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();openSrdManager()">🗄️ SRD database</button>
+    <button class="btn ghost" style="width:100%" onclick="closeModal();showList()">👥 All characters</button>`);};
+$("#btnSettings").onclick=()=>openSrdManager();
+
+/* ================== IDENTITY / LEVEL EDITOR ================== */
+function editIdentity(){const c=cur();
+  openModal(`<h2>Edit character ${XBTN}</h2>
+   <label>Name</label><input id="edName" value="${esc(c.name)}"><div class="spacer"></div>
+   <div class="grid2"><div><label>Race / species</label><input id="edRace" value="${esc(c.race)}"></div>
+   <div><label>Background</label><input id="edBg" value="${esc(c.background)}"></div></div><div class="spacer"></div>
+   <div class="grid2"><div><label>Alignment</label><input id="edAlign" value="${esc(c.alignment)}"></div>
+   <div><label>XP</label><input id="edXp" type="number" value="${c.xp||0}"></div></div>
+   <hr><h3>Classes</h3><div class="dim" style="margin-bottom:6px">Multiclass supported — add rows.</div>
+   <div id="classRows">${c.classes.map((k,i)=>classRow(k,i)).join("")}</div>
+   <button class="btn ghost small" onclick="addClassRow()">＋ Add class</button>
+   <hr><button class="btn" style="width:100%" onclick="saveIdentity()">Save</button>`);}
+function classRow(k,i){return `<div class="row" style="margin-bottom:8px" data-cls="${i}">
+  <select class="clsName">${CLASSES.map(n=>`<option ${n===k.name?"selected":""}>${n}</option>`).join("")}</select>
+  <input class="clsSub" placeholder="Subclass" value="${esc(k.subclass||"")}">
+  <input class="clsLv" type="number" min="1" max="20" value="${k.level}" style="max-width:70px">
+  <button class="iconbtn" style="flex:none" onclick="this.parentElement.remove()">✕</button></div>`;}
+function addClassRow(){$("#classRows").insertAdjacentHTML("beforeend",classRow({name:"Wizard",subclass:"",level:1},uid()));}
+function saveIdentity(){const c=cur();
+  c.name=$("#edName").value.trim()||"Unnamed";c.race=$("#edRace").value.trim();
+  c.background=$("#edBg").value.trim();c.alignment=$("#edAlign").value.trim();c.xp=+$("#edXp").value||0;
+  const rows=$$("#classRows [data-cls]");
+  c.classes=rows.map(r=>({name:r.querySelector(".clsName").value,subclass:r.querySelector(".clsSub").value.trim(),level:Math.min(20,Math.max(1,+r.querySelector(".clsLv").value||1))}));
+  if(!c.classes.length)c.classes=[{name:"Fighter",subclass:"",level:1}];
+  const main=c.classes[0];if(HIT_DIE[main.name])c.hitDice.die=HIT_DIE[main.name];
+  c.hitDice.total=totalLevel(c);
+  touch();closeModal();renderTab();}
+
+/* ================== MAIN TAB ================== */
+function renderMain(){const c=cur();const pb=profBonus(c);
+  const nextXp=totalLevel(c)<20?XP_THRESHOLDS[totalLevel(c)]:null;
+  const hpPct=Math.max(0,Math.min(100,100*c.hp.current/Math.max(1,c.hp.max)));
+  $("#scr-main").innerHTML=`
+  <div class="card">
+    <div class="abl-grid">${ABILITIES.map(a=>`
+      <div class="abl" onclick="d20Roll('${ABL_NAMES[a]} check',${mod(c.abilities[a])})" oncontextmenu="event.preventDefault();editAbility('${a}')">
+        <div class="a-name">${a}</div><div class="a-mod">${fmt(mod(c.abilities[a]))}</div>
+        <div class="a-score">${c.abilities[a]}</div></div>`).join("")}
+    </div>
+    <div class="dim center" style="margin-top:8px">Tap to roll · <button class="pill" onclick="editAbilities()">Edit scores</button></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="align-items:stretch">
+      <div class="statbox" onclick="d20Roll('Initiative',${mod(c.abilities.dex)+ (+c.initMisc||0)})"><div class="v">${fmt(mod(c.abilities.dex)+(+c.initMisc||0))}</div><div class="l">Initiative 🎲</div></div>
+      <div class="statbox" onclick="editStat('ac')"><div class="v">${c.ac}</div><div class="l">Armor Class</div></div>
+      <div class="statbox" onclick="editStat('speed')"><div class="v">${c.speed}</div><div class="l">Speed</div></div>
+      <div class="statbox" onclick="toggleInspiration()"><div class="v">${c.inspiration?"⭐":"—"}</div><div class="l">Inspiration</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Hit Points</h2>
+      <button class="pill" onclick="editHp()">Edit</button></div>
+    <div class="hp-wrap">
+      <button class="stepbtn" onclick="hpDelta(-1)">−</button>
+      <div style="flex:1">
+        <div class="hp-num">${c.hp.current}<span class="mx"> / ${c.hp.max}</span>${c.hp.temp?` <span style="font-size:15px;color:var(--blue)">+${c.hp.temp}</span>`:""}</div>
+        <div class="hpbar"><div style="width:${hpPct}%;background:${hpPct>50?"var(--green)":hpPct>25?"var(--gold)":"var(--red)"}"></div></div>
+      </div>
+      <button class="stepbtn" onclick="hpDelta(1)">＋</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost small" onclick="hpPrompt(-1)">Damage…</button>
+      <button class="btn ghost small" onclick="hpPrompt(1)">Heal…</button>
+      <button class="btn ghost small" onclick="tempHpPrompt()">Temp HP…</button>
+    </div>
+    ${c.hp.current<=0?`<hr><div class="row" style="align-items:center">
+      <div><div class="dim">Death saves — successes</div><div class="death-dots">${[1,2,3].map(i=>`<div class="ddot ${c.deathSaves.s>=i?"s":""}" onclick="setDeath('s',${i})"></div>`).join("")}</div></div>
+      <div><div class="dim">failures</div><div class="death-dots">${[1,2,3].map(i=>`<div class="ddot ${c.deathSaves.f>=i?"f":""}" onclick="setDeath('f',${i})"></div>`).join("")}</div></div>
+      <button class="btn ghost small" style="flex:none" onclick="d20Roll('Death save',0)">🎲</button></div>`:""}
+  </div>
+
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Hit Dice & Rest</h2>
+      <span class="dim">${c.hitDice.total-c.hitDice.used}/${c.hitDice.total} ${c.hitDice.die}</span></div>
+    <div class="pips">${Array.from({length:c.hitDice.total},(_,i)=>`<div class="pip ${i<c.hitDice.used?"used":"full"}" onclick="toggleHitDie(${i})"></div>`).join("")}</div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" onclick="spendHitDie()">🎲 Spend hit die</button>
+      <button class="btn ghost" onclick="shortRest()">🌙 Short rest</button>
+      <button class="btn gold" onclick="longRest()">☀️ Long rest</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Conditions</h2>
+      <span class="dim">Exhaustion <select style="width:auto;padding:4px 8px" onchange="cur().exhaustion=+this.value;touch()">${[0,1,2,3,4,5,6].map(x=>`<option ${c.exhaustion===x?"selected":""}>${x}</option>`).join("")}</select></span></div>
+    <div class="cond-grid">${CONDITIONS.map(cd=>`<button class="pill ${c.conditions.includes(cd)?"on":""}" onclick="toggleCondition('${cd}')">${cd}</button>`).join("")}</div>
+  </div>
+
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Attacks</h2><button class="pill" onclick="editAttack(-1)">＋ Add</button></div>
+    <div>${c.attacks.length?c.attacks.map((a,i)=>{
+      const hit=attackBonus(c,a);
+      return `<div class="li"><div class="li-head">
+        <div class="li-title">${esc(a.name)}<div class="li-sub">${esc(a.damage||"")} ${esc(a.type||"")} ${a.notes?"· "+esc(a.notes):""}</div></div>
+        <button class="btn ghost small" onclick="d20Roll('${jstr(a.name)} attack',${hit})">${fmt(hit)}</button>
+        ${a.damage?`<button class="btn ghost small" onclick="damageRoll('${jstr(a.name)} damage','${jstr(a.damage)}')">DMG</button>`:""}
+        <button class="iconbtn" onclick="editAttack(${i})">✏️</button>
+      </div></div>`;}).join(""):'<div class="empty">No attacks yet</div>'}</div>
+  </div>
+  ${nextXp!==null?`<p class="dim center">XP ${c.xp||0} / ${nextXp} for level ${totalLevel(c)+1}</p>`:""}`;}
+function attackBonus(c,a){let b=+a.bonusMisc||0;
+  if(a.ability&&a.ability!=="none")b+=mod(c.abilities[a.ability]);
+  if(a.proficient)b+=profBonus(c);return b;}
+function editAbilities(){const c=cur();
+  openModal(`<h2>Ability scores ${XBTN}</h2><div class="grid3">
+    ${ABILITIES.map(a=>`<div><label>${ABL_NAMES[a]}</label><input type="number" id="ab_${a}" value="${c.abilities[a]}" min="1" max="30"></div>`).join("")}
+  </div><div class="spacer"></div><button class="btn" style="width:100%" onclick="saveAbilities()">Save</button>`);}
+function editAbility(a){editAbilities();}
+function saveAbilities(){const c=cur();ABILITIES.forEach(a=>c.abilities[a]=Math.max(1,Math.min(30,+$("#ab_"+a).value||10)));touch();closeModal();renderTab();}
+function editStat(which){const c=cur();
+  if(which==="ac"){const v=prompt("Armor Class",c.ac);if(v!==null)c.ac=+v||c.ac;}
+  if(which==="speed"){const v=prompt("Speed (ft)",c.speed);if(v!==null)c.speed=+v||c.speed;}
+  touch();renderTab();}
+function toggleInspiration(){const c=cur();c.inspiration=!c.inspiration;touch();renderTab();if(c.inspiration)toast("⭐ Inspiration gained!");}
+function hpDelta(d){const c=cur();
+  if(d<0&&c.hp.temp>0){c.hp.temp--;}
+  else{c.hp.current=Math.max(0,Math.min(c.hp.max,c.hp.current+d));}
+  if(c.hp.current>0){c.deathSaves={s:0,f:0};}
+  touch();renderTab();}
+function hpPrompt(sign){const v=prompt(sign<0?"Damage taken":"Healing received");if(v===null)return;
+  let n=Math.abs(+v||0);const c=cur();
+  if(sign<0){const absorbed=Math.min(c.hp.temp,n);c.hp.temp-=absorbed;n-=absorbed;
+    c.hp.current=Math.max(0,c.hp.current-n);}
+  else{c.hp.current=Math.min(c.hp.max,c.hp.current+n);c.deathSaves={s:0,f:0};}
+  touch();renderTab();}
+function tempHpPrompt(){const v=prompt("Temporary HP");if(v===null)return;cur().hp.temp=Math.max(0,+v||0);touch();renderTab();}
+function editHp(){const c=cur();const v=prompt("Max HP",c.hp.max);if(v===null)return;
+  c.hp.max=Math.max(1,+v||c.hp.max);c.hp.current=Math.min(c.hp.current,c.hp.max);touch();renderTab();}
+function setDeath(k,i){const c=cur();c.deathSaves[k]=c.deathSaves[k]===i?i-1:i;touch();renderTab();
+  if(c.deathSaves.s>=3)toast("💚 Stabilized!");if(c.deathSaves.f>=3)toast("💀 Character has died…");}
+function toggleCondition(cd){const c=cur();
+  c.conditions.includes(cd)?c.conditions=c.conditions.filter(x=>x!==cd):c.conditions.push(cd);
+  touch();renderTab();}
+function toggleHitDie(i){const c=cur();c.hitDice.used=i<c.hitDice.used?i:i+1;touch();renderTab();}
+function spendHitDie(){const c=cur();
+  if(c.hitDice.used>=c.hitDice.total){toast("No hit dice left");return;}
+  const die=+c.hitDice.die.slice(1);const r=rollDie(die);const heal=Math.max(1,r+mod(c.abilities.con));
+  c.hitDice.used++;c.hp.current=Math.min(c.hp.max,c.hp.current+heal);touch();renderTab();
+  toast(`<b>Hit die</b><div class="big">+${heal} HP</div><div class="dim">${c.hitDice.die}: ${r} ${fmt(mod(c.abilities.con))} CON</div>`,4000);}
+function shortRest(){const c=cur();
+  if(c.spellcasting.pact.max>0){c.spellcasting.pact.used=0;}
+  touch();renderTab();toast("🌙 Short rest — pact slots restored. Spend hit dice to heal.");}
+function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and half your hit dice."))return;
+  const c=cur();c.hp.current=c.hp.max;c.hp.temp=0;
+  for(let l=1;l<=9;l++)c.spellcasting.slots[l].used=0;
+  c.spellcasting.pact.used=0;
+  c.hitDice.used=Math.max(0,c.hitDice.used-Math.max(1,Math.floor(c.hitDice.total/2)));
+  c.deathSaves={s:0,f:0};c.exhaustion=Math.max(0,c.exhaustion-1);
+  c.features.forEach(f=>{if(f.uses)f.usesLeft=f.uses;});
+  touch();renderTab();toast("☀️ Long rest complete!");}
+function editAttack(i){const c=cur();const a=i>=0?c.attacks[i]:{name:"",ability:"str",proficient:true,bonusMisc:0,damage:"",type:"",notes:""};
+  openModal(`<h2>${i>=0?"Edit":"New"} attack ${XBTN}</h2>
+   <label>Name</label><input id="atkName" value="${esc(a.name)}"><div class="spacer"></div>
+   <div class="grid2">
+    <div><label>Ability</label><select id="atkAb"><option value="none" ${a.ability==="none"?"selected":""}>None</option>${ABILITIES.map(x=>`<option value="${x}" ${a.ability===x?"selected":""}>${ABL_NAMES[x]}</option>`).join("")}</select></div>
+    <div><label>Misc to-hit bonus</label><input id="atkMisc" type="number" value="${a.bonusMisc||0}"></div></div>
+   <div class="spacer"></div>
+   <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px"><input type="checkbox" id="atkProf" ${a.proficient?"checked":""}> Proficient (adds ${fmt(profBonus(c))})</label>
+   <div class="spacer"></div>
+   <div class="grid2"><div><label>Damage (e.g. 1d8+3)</label><input id="atkDmg" value="${esc(a.damage)}"></div>
+   <div><label>Damage type</label><input id="atkType" value="${esc(a.type||"")}"></div></div>
+   <div class="spacer"></div><label>Notes</label><input id="atkNotes" value="${esc(a.notes||"")}">
+   <div class="spacer"></div><div class="row">
+   ${i>=0?`<button class="btn danger" onclick="cur().attacks.splice(${i},1);touch();closeModal();renderTab()">Delete</button>`:""}
+   <button class="btn" onclick="saveAttack(${i})">Save</button></div>`);}
+function saveAttack(i){const c=cur();
+  const a={name:$("#atkName").value.trim()||"Attack",ability:$("#atkAb").value,proficient:$("#atkProf").checked,
+    bonusMisc:+$("#atkMisc").value||0,damage:$("#atkDmg").value.trim(),type:$("#atkType").value.trim(),notes:$("#atkNotes").value.trim()};
+  i>=0?c.attacks[i]=a:c.attacks.push(a);touch();closeModal();renderTab();}
+/* ================== SKILLS TAB ================== */
+function renderSkills(){const c=cur();const pb=profBonus(c);
+  const passive=10+skillMod(c,"perception");
+  $("#scr-skills").innerHTML=`
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Saving throws</h2><span class="dim">tap circle = proficiency</span></div>
+    ${ABILITIES.map(a=>`<div class="skrow">
+      <div class="prof ${c.saveProf[a]?"p1":""}" onclick="toggleSaveProf('${a}')"></div>
+      <div class="nm">${ABL_NAMES[a]}</div>
+      <div class="md" onclick="d20Roll('${ABL_NAMES[a]} save',${saveMod(c,a)})">${fmt(saveMod(c,a))}</div></div>`).join("")}
+  </div>
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Skills</h2>
+      <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;margin:0">
+      <input type="checkbox" ${c.jack?"checked":""} onchange="cur().jack=this.checked;touch();renderTab()"> Jack of All Trades</label></div>
+    <div class="dim" style="margin-bottom:6px">Circle: empty = none · purple = proficient · gold = expertise. Tap modifier to roll.</div>
+    ${SKILLS.map(([k,n,ab])=>`<div class="skrow">
+      <div class="prof ${c.skills[k]===1?"p1":c.skills[k]===2?"p2":""}" onclick="cycleSkill('${k}')"></div>
+      <div class="nm">${n}</div><div class="ab">${ab}</div>
+      <div class="md" onclick="d20Roll('${n}',${skillMod(c,k)})">${fmt(skillMod(c,k))}</div></div>`).join("")}
+    <hr><div class="row"><div class="statbox" style="flex:1"><div class="v">${passive}</div><div class="l">Passive Perception</div></div>
+    <div class="statbox" style="flex:1"><div class="v">${10+skillMod(c,"investigation")}</div><div class="l">Passive Investigation</div></div>
+    <div class="statbox" style="flex:1"><div class="v">${10+skillMod(c,"insight")}</div><div class="l">Passive Insight</div></div></div>
+  </div>`;}
+function toggleSaveProf(a){const c=cur();c.saveProf[a]=!c.saveProf[a];touch();renderTab();}
+function cycleSkill(k){const c=cur();c.skills[k]=((c.skills[k]||0)+1)%3;touch();renderTab();}
+
+/* ================== SPELLS TAB ================== */
+function renderSpells(){const c=cur();const sc=c.spellcasting;const pb=profBonus(c);
+  const sMod=mod(c.abilities[sc.ability]);
+  const dc=8+pb+sMod, atk=pb+sMod;
+  const grouped={};sc.spells.forEach((s,i)=>{(grouped[s.level]=grouped[s.level]||[]).push([s,i]);});
+  const levels=Object.keys(grouped).map(Number).sort((a,b)=>a-b);
+  const slotRows=[1,2,3,4,5,6,7,8,9].filter(l=>sc.slots[l].max>0).map(l=>`
+    <div class="slot-lv"><div class="lv">Lv ${l}</div>
+      <div class="pips" style="flex:1">${Array.from({length:sc.slots[l].max},(_,i)=>
+        `<div class="pip ${i<sc.slots[l].used?"used":"full"}" onclick="toggleSlot(${l},${i})"></div>`).join("")}</div>
+      <span class="dim">${sc.slots[l].max-sc.slots[l].used} left</span></div>`).join("");
+  const pactRow=sc.pact.max>0?`<div class="slot-lv"><div class="lv" style="color:var(--gold)">Pact ${sc.pact.level}</div>
+      <div class="pips" style="flex:1">${Array.from({length:sc.pact.max},(_,i)=>
+        `<div class="pip ${i<sc.pact.used?"used":"full"}" style="border-color:var(--gold);${i>=sc.pact.used?"background:var(--gold)":""}" onclick="togglePact(${i})"></div>`).join("")}</div>
+      <span class="dim">${sc.pact.max-sc.pact.used} left</span></div>`:"";
+  $("#scr-spells").innerHTML=`
+  <div class="card"><div class="row">
+    <div class="statbox"><div class="v">${dc}</div><div class="l">Spell save DC</div></div>
+    <div class="statbox" onclick="d20Roll('Spell attack',${atk})"><div class="v">${fmt(atk)}</div><div class="l">Spell attack 🎲</div></div>
+    <div class="statbox"><div class="v"><select style="width:auto;border:none;background:none;font-size:16px;font-weight:700;padding:0;color:var(--txt)" onchange="cur().spellcasting.ability=this.value;touch();renderTab()">
+      ${ABILITIES.map(a=>`<option value="${a}" ${sc.ability===a?"selected":""}>${a.toUpperCase()}</option>`).join("")}</select></div><div class="l">Casting ability</div></div>
+  </div></div>
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Spell slots</h2><button class="pill" onclick="editSlots()">⚙️ Configure</button></div>
+    ${slotRows||pactRow?slotRows+pactRow:'<div class="empty">No slots configured. Tap Configure — auto-fill by caster level or set manually.</div>'}
+  </div>
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Spells</h2><div>
+      <button class="pill" onclick="openSpellBrowser()">📖 SRD</button>
+      <button class="pill" onclick="editCustomSpell(-1)">＋ Custom</button></div></div>
+    ${sc.spells.length?levels.map(lv=>`
+      <div class="dim" style="margin:10px 0 6px;font-weight:700">${lv===0?"CANTRIPS":"LEVEL "+lv}</div>
+      ${grouped[lv].map(([s,i])=>`<div class="li" id="sp_${i}">
+        <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
+          ${lv>0?`<input type="checkbox" ${s.prepared?"checked":""} onclick="event.stopPropagation()" onchange="cur().spellcasting.spells[${i}].prepared=this.checked;touch()" title="Prepared">`:""}
+          <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}
+            <div class="li-sub">${esc(s.time||"")}${s.range?" · "+esc(s.range):""}</div></div>
+          ${lv>0?`<button class="btn small" onclick="event.stopPropagation();castSpell(${lv})">Cast</button>`:""}
+          <button class="iconbtn" onclick="event.stopPropagation();spellMenu(${i})">⋮</button></div>
+        <div class="li-body">
+          <div class="dim">${esc(s.school||"")} · ${esc(s.components||"")}${s.duration?" · "+esc(s.duration):""}</div>
+          <p>${esc(s.desc||"").replace(/\n+/g,"</p><p>")}</p>
+          ${s.higher?`<p><b>At higher levels.</b> ${esc(s.higher)}</p>`:""}</div>
+      </div>`).join("")}`).join(""):'<div class="empty">No spells yet. Add from the SRD library or create custom ones.</div>'}
+  </div>`;}
+function toggleSlot(l,i){const s=cur().spellcasting.slots[l];s.used=i<s.used?i:i+1;touch();renderTab();}
+function togglePact(i){const p=cur().spellcasting.pact;p.used=i<p.used?i:i+1;touch();renderTab();}
+function castSpell(lv){const sc=cur().spellcasting;
+  // find lowest available slot >= lv
+  for(let l=lv;l<=9;l++){const s=sc.slots[l];
+    if(s.max-s.used>0){s.used++;touch();renderTab();toast(`✨ Cast with level ${l} slot (${s.max-s.used} left)`);return;}}
+  if(sc.pact.max-sc.pact.used>0&&sc.pact.level>=lv){sc.pact.used++;touch();renderTab();toast(`✨ Cast with pact slot (${sc.pact.max-sc.pact.used} left)`);return;}
+  toast("⚠️ No slots of level "+lv+"+ left");}
+function spellMenu(i){const s=cur().spellcasting.spells[i];
+  openModal(`<h2>${esc(s.name)} ${XBTN}</h2>
+    <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();editCustomSpell(${i})">✏️ Edit</button>
+    <button class="btn danger" style="width:100%" onclick="cur().spellcasting.spells.splice(${i},1);touch();closeModal();renderTab()">🗑️ Remove</button>`);}
+function editSlots(){const c=cur();const sc=c.spellcasting;
+  openModal(`<h2>Spell slots ${XBTN}</h2>
+   <div class="card" style="background:var(--card2)"><h3>Auto-fill</h3><div class="spacer"></div>
+    <div class="row"><div><label>Caster level</label><input id="casterLv" type="number" min="0" max="20" value="${totalLevel(c)}"></div>
+    <div><label>Type</label><select id="casterType">
+      <option value="full">Full (Wizard, Cleric…)</option><option value="half">Half (Paladin, Ranger)</option>
+      <option value="third">Third (EK, AT)</option></select></div></div>
+    <div class="dim" style="margin-top:4px">Multiclass: full + half÷2 + third÷3 (rounded down), use as caster level with Full.</div>
+    <div class="spacer"></div><button class="btn small" onclick="autoSlots()">Apply</button></div>
+   <h3>Manual (max per level)</h3><div class="spacer"></div>
+   <div class="grid3">${[1,2,3,4,5,6,7,8,9].map(l=>`<div><label>Level ${l}</label><input id="sl_${l}" type="number" min="0" max="9" value="${sc.slots[l].max}"></div>`).join("")}</div>
+   <hr><h3 style="color:var(--gold)">Pact magic (Warlock)</h3><div class="spacer"></div>
+   <div class="row"><div><label>Warlock level (0 = none)</label><input id="pactWl" type="number" min="0" max="20" value="0"></div>
+   <div><label>Slots</label><input id="pactMax" type="number" min="0" value="${sc.pact.max}"></div>
+   <div><label>Slot level</label><input id="pactLv" type="number" min="1" max="5" value="${sc.pact.level}"></div></div>
+   <div class="dim" style="margin-top:4px">Enter Warlock level to auto-fill, or set slots/level manually.</div>
+   <hr><button class="btn" style="width:100%" onclick="saveSlots()">Save</button>`);}
+function autoSlots(){const lv=Math.max(0,Math.min(20,+$("#casterLv").value||0));const t=$("#casterType").value;
+  let eff=t==="full"?lv:t==="half"?Math.floor(lv/2):Math.floor(lv/3);
+  const table=eff>0?FULL_CASTER_SLOTS[eff]||[]:[];
+  for(let l=1;l<=9;l++)$("#sl_"+l).value=table[l-1]||0;
+  toast("Slots filled — press Save");}
+function saveSlots(){const sc=cur().spellcasting;
+  for(let l=1;l<=9;l++){const m=Math.max(0,+$("#sl_"+l).value||0);sc.slots[l].max=m;sc.slots[l].used=Math.min(sc.slots[l].used,m);}
+  const wl=+$("#pactWl").value||0;
+  if(wl>0){sc.pact.max=wl===1?1:wl<11?2:wl<17?3:4;sc.pact.level=Math.min(5,Math.ceil(wl/2));}
+  else{sc.pact.max=Math.max(0,+$("#pactMax").value||0);sc.pact.level=Math.max(1,Math.min(5,+$("#pactLv").value||1));}
+  sc.pact.used=Math.min(sc.pact.used,sc.pact.max);
+  touch();closeModal();renderTab();}
+function editCustomSpell(i){const sc=cur().spellcasting;
+  const s=i>=0?sc.spells[i]:{name:"",level:0,school:"",time:"1 action",range:"",components:"V, S",duration:"",conc:false,ritual:false,prepared:true,desc:"",higher:""};
+  openModal(`<h2>${i>=0?"Edit":"Custom"} spell ${XBTN}</h2>
+   <label>Name</label><input id="cs_name" value="${esc(s.name)}"><div class="spacer"></div>
+   <div class="grid3"><div><label>Level</label><select id="cs_lv">${[0,1,2,3,4,5,6,7,8,9].map(l=>`<option value="${l}" ${s.level===l?"selected":""}>${l===0?"Cantrip":l}</option>`).join("")}</select></div>
+   <div><label>School</label><input id="cs_school" value="${esc(s.school)}"></div>
+   <div><label>Casting time</label><input id="cs_time" value="${esc(s.time)}"></div></div><div class="spacer"></div>
+   <div class="grid3"><div><label>Range</label><input id="cs_range" value="${esc(s.range)}"></div>
+   <div><label>Components</label><input id="cs_comp" value="${esc(s.components)}"></div>
+   <div><label>Duration</label><input id="cs_dur" value="${esc(s.duration)}"></div></div><div class="spacer"></div>
+   <div class="row"><label style="display:flex;align-items:center;gap:6px;text-transform:none"><input type="checkbox" id="cs_conc" ${s.conc?"checked":""}>Concentration</label>
+   <label style="display:flex;align-items:center;gap:6px;text-transform:none"><input type="checkbox" id="cs_rit" ${s.ritual?"checked":""}>Ritual</label></div>
+   <div class="spacer"></div><label>Description</label><textarea id="cs_desc">${esc(s.desc)}</textarea>
+   <div class="spacer"></div><label>At higher levels</label><input id="cs_higher" value="${esc(s.higher||"")}">
+   <div class="spacer"></div><button class="btn" style="width:100%" onclick="saveCustomSpell(${i})">Save</button>`);}
+function saveCustomSpell(i){const sc=cur().spellcasting;
+  const s={name:$("#cs_name").value.trim()||"Spell",level:+$("#cs_lv").value,school:$("#cs_school").value.trim(),
+   time:$("#cs_time").value.trim(),range:$("#cs_range").value.trim(),components:$("#cs_comp").value.trim(),
+   duration:$("#cs_dur").value.trim(),conc:$("#cs_conc").checked,ritual:$("#cs_rit").checked,
+   prepared:i>=0?sc.spells[i].prepared:true,desc:$("#cs_desc").value,higher:$("#cs_higher").value.trim(),source:"custom"};
+  i>=0?sc.spells[i]=s:sc.spells.push(s);touch();closeModal();renderTab();}
+
+/* ================== INVENTORY TAB ================== */
+function coinsToGp(cu){return cu.pp*10+cu.gp+cu.ep*0.5+cu.sp*0.1+cu.cp*0.01;}
+function renderInv(){const c=cur();const inv=c.inventory;
+  const totW=inv.items.reduce((a,it)=>a+(+it.weight||0)*(+it.qty||1),0);
+  const cap=c.abilities.str*15;
+  const attuned=inv.items.filter(i=>i.attuned).length;
+  $("#scr-inv").innerHTML=`
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Currency</h2><span class="dim">≈ ${coinsToGp(inv.currency).toFixed(1)} gp</span></div>
+    <div class="row">${["pp","gp","ep","sp","cp"].map(k=>`<div><label>${k}</label>
+      <input type="number" min="0" value="${inv.currency[k]}" onchange="cur().inventory.currency.${k}=Math.max(0,+this.value||0);touch();renderTab()"></div>`).join("")}</div>
+  </div>
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Items</h2><div>
+      <button class="pill" onclick="openItemBrowser()">📖 SRD</button>
+      <button class="pill" onclick="editItem(-1)">＋ Add</button></div></div>
+    <div class="dim" style="margin-bottom:8px">Weight ${totW.toFixed(1)} / ${cap} lb ${totW>cap?'<span class="warn">— encumbered!</span>':""} · Attuned ${attuned}/3${attuned>3?' <span class="warn">(!)</span>':""}</div>
+    <input placeholder="🔍 Filter items…" oninput="filterItems(this.value)" id="invFilter">
+    <div class="spacer"></div>
+    <div id="itemList">${inv.items.length?inv.items.map((it,i)=>itemRow(it,i)).join(""):'<div class="empty">Backpack is empty</div>'}</div>
+  </div>`;}
+function itemRow(it,i){return `<div class="li" data-nm="${esc(it.name.toLowerCase())}">
+  <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
+    <div class="li-title">${esc(it.name)}${it.qty>1?" ×"+it.qty:""}
+      ${it.equipped?'<span class="tag" style="color:var(--green);border-color:var(--green)">equipped</span>':""}
+      ${it.attuned?'<span class="tag c">attuned</span>':""}
+      <div class="li-sub">${it.weight?it.weight+" lb":""}${it.cost?" · "+esc(it.cost):""}</div></div>
+    <button class="iconbtn" onclick="event.stopPropagation();qtyDelta(${i},-1)">−</button>
+    <button class="iconbtn" onclick="event.stopPropagation();qtyDelta(${i},1)">＋</button>
+    <button class="iconbtn" onclick="event.stopPropagation();editItem(${i})">✏️</button></div>
+  <div class="li-body">${it.desc?`<p>${esc(it.desc).replace(/\n+/g,"</p><p>")}</p>`:""}
+    <div class="row"><button class="pill ${it.equipped?"on":""}" onclick="cur().inventory.items[${i}].equipped=!${!!it.equipped};touch();renderTab()">Equipped</button>
+    <button class="pill ${it.attuned?"on":""}" onclick="cur().inventory.items[${i}].attuned=!${!!it.attuned};touch();renderTab()">Attuned</button></div>
+    ${it.notes?`<p class="dim">${esc(it.notes)}</p>`:""}</div></div>`;}
+function filterItems(q){q=q.toLowerCase();$$("#itemList .li").forEach(el=>el.style.display=el.dataset.nm.includes(q)?"":"none");}
+function qtyDelta(i,d){const it=cur().inventory.items[i];it.qty=Math.max(0,(+it.qty||1)+d);
+  if(it.qty===0&&confirm("Remove "+it.name+"?")){cur().inventory.items.splice(i,1);}else if(it.qty===0)it.qty=1;
+  touch();renderTab();}
+function editItem(i){const inv=cur().inventory;
+  const it=i>=0?inv.items[i]:{name:"",qty:1,weight:"",cost:"",equipped:false,attuned:false,desc:"",notes:""};
+  openModal(`<h2>${i>=0?"Edit":"New"} item ${XBTN}</h2>
+   <label>Name</label><input id="it_name" value="${esc(it.name)}"><div class="spacer"></div>
+   <div class="grid3"><div><label>Qty</label><input id="it_qty" type="number" min="1" value="${it.qty||1}"></div>
+   <div><label>Weight (lb)</label><input id="it_w" type="number" step="0.1" value="${it.weight}"></div>
+   <div><label>Cost</label><input id="it_cost" value="${esc(it.cost||"")}"></div></div>
+   <div class="spacer"></div><label>Description</label><textarea id="it_desc">${esc(it.desc||"")}</textarea>
+   <div class="spacer"></div><label>Notes</label><input id="it_notes" value="${esc(it.notes||"")}">
+   <div class="spacer"></div><div class="row">
+   ${i>=0?`<button class="btn danger" onclick="cur().inventory.items.splice(${i},1);touch();closeModal();renderTab()">Delete</button>`:""}
+   <button class="btn" onclick="saveItem(${i})">Save</button></div>`);}
+function saveItem(i){const inv=cur().inventory;
+  const it={name:$("#it_name").value.trim()||"Item",qty:Math.max(1,+$("#it_qty").value||1),
+   weight:+$("#it_w").value||0,cost:$("#it_cost").value.trim(),
+   equipped:i>=0?inv.items[i].equipped:false,attuned:i>=0?inv.items[i].attuned:false,
+   desc:$("#it_desc").value,notes:$("#it_notes").value.trim()};
+  i>=0?inv.items[i]=it:inv.items.push(it);touch();closeModal();renderTab();}
+/* ================== FEATURES TAB ================== */
+function renderFeat(){const c=cur();
+  $("#scr-feat").innerHTML=`
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">Features & traits</h2><button class="pill" onclick="editFeature(-1)">＋ Add</button></div>
+    ${c.features.length?c.features.map((f,i)=>`<div class="li">
+      <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="li-title">${esc(f.name)}${f.uses?`<div class="li-sub">${f.usesLeft??f.uses}/${f.uses} uses</div>`:""}</div>
+        ${f.uses?`<button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>`:""}
+        <button class="iconbtn" onclick="event.stopPropagation();editFeature(${i})">✏️</button></div>
+      <div class="li-body"><p>${esc(f.desc||"").replace(/\n+/g,"</p><p>")}</p></div></div>`).join(""):'<div class="empty">No features yet — class features, racial traits, feats…</div>'}
+  </div>
+  <div class="card"><h2>Proficiencies & languages</h2>
+    <label>Armor</label><input value="${esc(c.profs.armor)}" onchange="cur().profs.armor=this.value;touch()"><div class="spacer"></div>
+    <label>Weapons</label><input value="${esc(c.profs.weapons)}" onchange="cur().profs.weapons=this.value;touch()"><div class="spacer"></div>
+    <label>Tools</label><input value="${esc(c.profs.tools)}" onchange="cur().profs.tools=this.value;touch()"><div class="spacer"></div>
+    <label>Languages</label><input value="${esc(c.profs.languages)}" onchange="cur().profs.languages=this.value;touch()">
+  </div>
+  <div class="card"><h2>Notes</h2>
+    <textarea style="min-height:140px" onchange="cur().notes=this.value;touch()">${esc(c.notes)}</textarea>
+  </div>`;}
+function useFeature(i){const f=cur().features[i];
+  if(f.usesLeft===undefined)f.usesLeft=f.uses;
+  if(f.usesLeft<=0){toast("No uses left — long rest to recover");return;}
+  f.usesLeft--;touch();renderTab();toast(esc(f.name)+": "+f.usesLeft+" uses left");}
+function editFeature(i){const c=cur();
+  const f=i>=0?c.features[i]:{name:"",desc:"",uses:0};
+  openModal(`<h2>${i>=0?"Edit":"New"} feature ${XBTN}</h2>
+   <label>Name</label><input id="ft_name" value="${esc(f.name)}"><div class="spacer"></div>
+   <label>Uses per rest (0 = passive)</label><input id="ft_uses" type="number" min="0" value="${f.uses||0}"><div class="spacer"></div>
+   <label>Description</label><textarea id="ft_desc">${esc(f.desc)}</textarea><div class="spacer"></div>
+   <div class="row">
+   ${i>=0?`<button class="btn danger" onclick="cur().features.splice(${i},1);touch();closeModal();renderTab()">Delete</button>`:""}
+   <button class="btn" onclick="saveFeature(${i})">Save</button></div>`);}
+function saveFeature(i){const c=cur();
+  const f={name:$("#ft_name").value.trim()||"Feature",uses:+$("#ft_uses").value||0,desc:$("#ft_desc").value};
+  if(f.uses)f.usesLeft=i>=0?Math.min(c.features[i].usesLeft??f.uses,f.uses):f.uses;
+  i>=0?c.features[i]=f:c.features.push(f);touch();closeModal();renderTab();}
+
+/* ================== SRD DATABASE (IndexedDB + Open5e) ================== */
+const SRD={spells:null,items:null}; window.SRD=SRD; // in-memory cache (exposed for debugging)
+function idb(){if(typeof indexedDB==="undefined")return Promise.reject(new Error("no idb"));
+  return new Promise((res,rej)=>{const rq=indexedDB.open("grimoire_srd",1);
+  rq.onupgradeneeded=()=>rq.result.createObjectStore("srd");
+  rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error);});}
+async function idbGet(key){const d=await idb();return new Promise((res,rej)=>{
+  const rq=d.transaction("srd").objectStore("srd").get(key);
+  rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error);});}
+async function idbSet(key,val){const d=await idb();return new Promise((res,rej)=>{
+  const tx=d.transaction("srd","readwrite");tx.objectStore("srd").put(val,key);
+  tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
+async function loadSrd(){try{
+  SRD.spells=await idbGet("spells")||null;
+  SRD.items=await idbGet("items")||null;}catch(e){console.warn(e);}}
+async function fetchAllPages(url,onProgress){let out=[],page=1;
+  while(url){const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);
+    const j=await r.json();out=out.concat(j.results);url=j.next;
+    if(onProgress)onProgress(out.length,j.count);page++;if(page>60)break;}
+  return out;}
+async function syncSrd(){
+  const stat=$("#srdProgress");const set=t=>{if(stat)stat.textContent=t;};
+  try{
+    set("Downloading spells…");
+    const raw=await fetchAllPages("https://api.open5e.com/v1/spells/?document__slug=wotc-srd&limit=100",(n,t)=>set(`Spells ${n}/${t}…`));
+    const spells=raw.map(s=>({name:s.name,level:s.level_int,school:s.school,time:s.casting_time,range:s.range,
+      components:s.components+(s.material?" ("+s.material+")":""),duration:s.duration,
+      conc:s.requires_concentration,ritual:s.can_be_cast_as_ritual,desc:s.desc,higher:s.higher_level||"",
+      classes:(s.dnd_class||"").split(",").map(x=>x.trim()).filter(Boolean)}));
+    await idbSet("spells",spells);SRD.spells=spells;
+    set("Downloading weapons & armor…");
+    const weapons=await fetchAllPages("https://api.open5e.com/v1/weapons/?document__slug=wotc-srd&limit=100");
+    const armor=await fetchAllPages("https://api.open5e.com/v1/armor/?document__slug=wotc-srd&limit=100");
+    set("Downloading magic items…");
+    const magic=await fetchAllPages("https://api.open5e.com/v1/magicitems/?document__slug=wotc-srd&limit=100",(n,t)=>set(`Magic items ${n}/${t}…`));
+    const items=[
+      ...weapons.map(w=>({name:w.name,cat:"Weapon",cost:w.cost||"",weight:parseFloat(w.weight)||0,
+        desc:`${w.damage_dice||""} ${w.damage_type||""} damage. ${(w.properties||[]).join(", ")}`.trim()})),
+      ...armor.map(a=>({name:a.name,cat:"Armor",cost:a.cost||"",weight:parseFloat(a.weight)||0,
+        desc:`AC: ${a.ac_string||""}. ${a.stealth_disadvantage?"Stealth disadvantage. ":""}${a.strength_requirement?"Str "+a.strength_requirement+" required.":""}`.trim()})),
+      ...GEAR.map(([n,cost,w])=>({name:n,cat:"Gear",cost,weight:w,desc:""})),
+      ...magic.map(m=>({name:m.name,cat:"Magic ("+(m.rarity||"?")+")",cost:"",weight:0,
+        desc:m.desc,attunement:(m.requires_attunement||"").includes("attunement")}))];
+    await idbSet("items",items);SRD.items=items;
+    set("");renderSrdStatus();toast("✅ SRD database ready — works offline now");
+    if($("#srdMgr"))openSrdManager();
+  }catch(e){set("");toast("⚠️ Download failed — check your connection ("+esc(e.message)+")");}}
+function srdCounts(){return {sp:SRD.spells?SRD.spells.length:0,it:SRD.items?SRD.items.length:0};}
+function renderSrdStatus(){const el=$("#srdStatus");if(!el)return;const {sp,it}=srdCounts();
+  el.innerHTML=sp?`🗄️ SRD library: ${sp} spells, ${it} items (offline)`:`<button class="btn ghost small" onclick="syncSrd()">⬇️ Download SRD library (spells & items)</button><span id="srdProgress" style="display:block;margin-top:4px"></span>`;}
+function openSrdManager(){const {sp,it}=srdCounts();
+  openModal(`<div id="srdMgr"><h2>SRD database ${XBTN}</h2>
+   <p class="dim">The 5e System Reference Document library (spells, weapons, armor, magic items) is downloaded once from Open5e and stored on your device for offline use.</p>
+   <p>${sp?`✅ ${sp} spells · ${it} items stored`:"❌ Not downloaded yet"}</p>
+   <span id="srdProgress" class="dim"></span><div class="spacer"></div>
+   <button class="btn" style="width:100%" onclick="syncSrd()">${sp?"🔄 Re-download / update":"⬇️ Download now (~3 MB)"}</button>
+   <div class="spacer"></div>
+   <p class="dim">Data: Open5e API · 5e SRD © Wizards of the Coast, CC-BY-4.0 / OGL.</p></div>`);}
+
+/* ================== SRD BROWSERS ================== */
+let browserFilter={q:"",lv:"all",cls:"all"};
+function openSpellBrowser(){
+  if(!SRD.spells){openModal(`<h2>Spell library ${XBTN}</h2><p class="dim">The SRD library isn't downloaded yet.</p>
+    <span id="srdProgress" class="dim"></span><div class="spacer"></div>
+    <button class="btn" style="width:100%" onclick="syncSrd().then(()=>{closeModal();openSpellBrowser()})">⬇️ Download SRD library</button>`);return;}
+  browserFilter={q:"",lv:"all",cls:"all"};
+  const classes=["all","Bard","Cleric","Druid","Paladin","Ranger","Sorcerer","Warlock","Wizard"];
+  openModal(`<h2>Spell library ${XBTN}</h2>
+   <div class="searchwrap"><input id="spq" placeholder="🔍 Search ${SRD.spells.length} spells…" oninput="browserFilter.q=this.value;renderSpellResults()">
+   <div class="filter-pills" id="lvPills">${["all",0,1,2,3,4,5,6,7,8,9].map(l=>`<button class="pill ${l==="all"?"on":""}" onclick="browserFilter.lv='${l}';$$('#lvPills .pill').forEach(p=>p.classList.remove('on'));this.classList.add('on');renderSpellResults()">${l==="all"?"All":l===0?"Cantrip":"Lv "+l}</button>`).join("")}</div>
+   <div class="filter-pills" id="clsPills">${classes.map(k=>`<button class="pill ${k==="all"?"on":""}" onclick="browserFilter.cls='${k}';$$('#clsPills .pill').forEach(p=>p.classList.remove('on'));this.classList.add('on');renderSpellResults()">${k==="all"?"All classes":k}</button>`).join("")}</div></div>
+   <div id="spResults"></div>`);
+  renderSpellResults();}
+function renderSpellResults(){const q=browserFilter.q.toLowerCase();
+  const list=SRD.spells.filter(s=>
+    (browserFilter.lv==="all"||s.level===+browserFilter.lv)&&
+    (browserFilter.cls==="all"||s.classes.some(c=>c.includes(browserFilter.cls)))&&
+    (!q||s.name.toLowerCase().includes(q))).slice(0,80);
+  $("#spResults").innerHTML=list.map((s,i)=>`<div class="li">
+    <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
+      <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}
+        <div class="li-sub">${s.level===0?"Cantrip":"Level "+s.level} · ${esc(s.school)}</div></div>
+      <button class="btn small" onclick="event.stopPropagation();addSrdSpell('${jstr(s.name)}')">Add</button></div>
+    <div class="li-body"><div class="dim">${esc(s.time)} · ${esc(s.range)} · ${esc(s.components)} · ${esc(s.duration)}<br>${esc(s.classes.join(", "))}</div>
+      <p>${esc(s.desc).replace(/\n+/g,"</p><p>")}</p>${s.higher?`<p><b>At higher levels.</b> ${esc(s.higher)}</p>`:""}</div>
+  </div>`).join("")||'<div class="empty">No matches</div>';}
+function addSrdSpell(name){const s=SRD.spells.find(x=>x.name===name);if(!s)return;
+  const sc=cur().spellcasting;
+  if(sc.spells.some(x=>x.name===s.name)){toast("Already known");return;}
+  sc.spells.push({name:s.name,level:s.level,school:s.school,time:s.time,range:s.range,components:s.components,
+    duration:s.duration,conc:s.conc,ritual:s.ritual,prepared:false,desc:s.desc,higher:s.higher,source:"srd"});
+  touch();toast("✨ "+esc(s.name)+" added");}
+function openItemBrowser(){
+  if(!SRD.items){openModal(`<h2>Item library ${XBTN}</h2><p class="dim">The SRD library isn't downloaded yet.</p>
+    <span id="srdProgress" class="dim"></span><div class="spacer"></div>
+    <button class="btn" style="width:100%" onclick="syncSrd().then(()=>{closeModal();openItemBrowser()})">⬇️ Download SRD library</button>`);return;}
+  browserFilter={q:"",cat:"all"};
+  const cats=["all","Weapon","Armor","Gear","Magic"];
+  openModal(`<h2>Item library ${XBTN}</h2>
+   <div class="searchwrap"><input id="itq" placeholder="🔍 Search ${SRD.items.length} items…" oninput="browserFilter.q=this.value;renderItemResults()">
+   <div class="filter-pills" id="catPills">${cats.map(k=>`<button class="pill ${k==="all"?"on":""}" onclick="browserFilter.cat='${k}';$$('#catPills .pill').forEach(p=>p.classList.remove('on'));this.classList.add('on');renderItemResults()">${k==="all"?"All":k}</button>`).join("")}</div></div>
+   <div id="itResults"></div>`);
+  renderItemResults();}
+function renderItemResults(){const q=browserFilter.q.toLowerCase();
+  const list=SRD.items.filter(it=>
+    (browserFilter.cat==="all"||it.cat.startsWith(browserFilter.cat))&&
+    (!q||it.name.toLowerCase().includes(q))).slice(0,80);
+  $("#itResults").innerHTML=list.map(it=>`<div class="li">
+    <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
+      <div class="li-title">${esc(it.name)}<div class="li-sub">${esc(it.cat)}${it.cost?" · "+esc(it.cost):""}${it.weight?" · "+it.weight+" lb":""}</div></div>
+      <button class="btn small" onclick="event.stopPropagation();addSrdItem('${jstr(it.name)}')">Add</button></div>
+    <div class="li-body"><p>${esc(it.desc||"—").replace(/\n+/g,"</p><p>")}</p></div>
+  </div>`).join("")||'<div class="empty">No matches</div>';}
+function addSrdItem(name){const it=SRD.items.find(x=>x.name===name);if(!it)return;
+  const inv=cur().inventory;
+  const ex=inv.items.find(x=>x.name===it.name);
+  if(ex){ex.qty=(+ex.qty||1)+1;}
+  else inv.items.push({name:it.name,qty:1,weight:it.weight||0,cost:it.cost||"",equipped:false,attuned:false,desc:it.desc||"",notes:""});
+  touch();toast("🎒 "+esc(it.name)+" added");}
+
+/* ================== INIT (v1.0) ================== */
+(async function init(){
+  load();await loadSrd();
+  if(db.currentId&&cur())openChar(db.currentId);else showList();
+  if("serviceWorker" in navigator&&location.protocol!=="file:")
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+
+</script>
+</body>
+</html>
