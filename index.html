@@ -219,6 +219,55 @@ const CLASS_PROFS={
  Sorcerer:{armor:"None",weapons:"Simple weapons",tools:""},
  Warlock:{armor:"Light armor",weapons:"Simple weapons",tools:""},
  Wizard:{armor:"None",weapons:"Simple weapons",tools:""}};
+/* Levels at which each class gains subclass features */
+const SUBCLASS_LEVELS={
+ "2014":{Artificer:[3,5,9,15],Barbarian:[3,6,10,14],Bard:[3,6,14],Cleric:[1,2,6,8,17],Druid:[2,6,10,14],Fighter:[3,7,10,15,18],Monk:[3,6,11,17],Paladin:[3,7,15,20],Ranger:[3,7,11,15],Rogue:[3,9,13,17],Sorcerer:[1,6,14,18],Warlock:[1,6,10,14],Wizard:[2,6,10,14]},
+ "2024":{Barbarian:[3,6,10,14],Bard:[3,6,14],Cleric:[3,6,17],Druid:[3,6,10,14],Fighter:[3,7,10,15,18],Monk:[3,6,11,17],Paladin:[3,7,15,20],Ranger:[3,7,11,15],Rogue:[3,9,13,17],Sorcerer:[3,6,14,18],Warlock:[3,6,10,14],Wizard:[3,6,10,14]}};
+/* Official subclass names (names only — full text of non-SRD subclasses is not freely licensed) */
+const SUBCLASS_CATALOG={
+ "2014":{
+  Barbarian:["Path of the Berserker","Path of the Totem Warrior","Path of the Ancestral Guardian","Path of the Storm Herald","Path of the Zealot","Path of the Beast","Path of Wild Magic","Path of the Battlerager"],
+  Bard:["College of Lore","College of Valor","College of Glamour","College of Swords","College of Whispers","College of Creation","College of Eloquence","College of Spirits"],
+  Cleric:["Life Domain","Knowledge Domain","Light Domain","Nature Domain","Tempest Domain","Trickery Domain","War Domain","Death Domain","Arcana Domain","Forge Domain","Grave Domain","Order Domain","Peace Domain","Twilight Domain"],
+  Druid:["Circle of the Land","Circle of the Moon","Circle of Dreams","Circle of the Shepherd","Circle of Spores","Circle of Stars","Circle of Wildfire"],
+  Fighter:["Champion","Battle Master","Eldritch Knight","Arcane Archer","Cavalier","Samurai","Psi Warrior","Rune Knight","Purple Dragon Knight","Echo Knight"],
+  Monk:["Way of the Open Hand","Way of Shadow","Way of the Four Elements","Way of the Kensei","Way of the Sun Soul","Way of the Drunken Master","Way of Mercy","Way of the Astral Self","Way of the Long Death","Way of the Ascendant Dragon"],
+  Paladin:["Oath of Devotion","Oath of the Ancients","Oath of Vengeance","Oathbreaker","Oath of Conquest","Oath of Redemption","Oath of Glory","Oath of the Watchers","Oath of the Crown"],
+  Ranger:["Hunter","Beast Master","Gloom Stalker","Horizon Walker","Monster Slayer","Fey Wanderer","Swarmkeeper","Drakewarden"],
+  Rogue:["Thief","Assassin","Arcane Trickster","Inquisitive","Mastermind","Scout","Swashbuckler","Phantom","Soulknife"],
+  Sorcerer:["Draconic Bloodline","Wild Magic","Divine Soul","Shadow Magic","Storm Sorcery","Aberrant Mind","Clockwork Soul","Lunar Sorcery"],
+  Warlock:["The Fiend","The Archfey","The Great Old One","The Celestial","The Hexblade","The Fathomless","The Genie","The Undying","The Undead"],
+  Wizard:["School of Evocation","School of Abjuration","School of Conjuration","School of Divination","School of Enchantment","School of Illusion","School of Necromancy","School of Transmutation","War Magic","Bladesinging","Order of Scribes","Chronurgy Magic","Graviturgy Magic"],
+  Artificer:["Alchemist","Armorer","Artillerist","Battle Smith"]},
+ "2024":{
+  Barbarian:["Path of the Berserker","Path of the Wild Heart","Path of the World Tree","Path of the Zealot"],
+  Bard:["College of Dance","College of Glamour","College of Lore","College of Valor"],
+  Cleric:["Life Domain","Light Domain","Trickery Domain","War Domain"],
+  Druid:["Circle of the Land","Circle of the Moon","Circle of the Sea","Circle of the Stars"],
+  Fighter:["Battle Master","Champion","Eldritch Knight","Psi Warrior"],
+  Monk:["Warrior of Mercy","Warrior of Shadow","Warrior of the Elements","Warrior of the Open Hand"],
+  Paladin:["Oath of Devotion","Oath of Glory","Oath of the Ancients","Oath of Vengeance"],
+  Ranger:["Beast Master","Fey Wanderer","Gloom Stalker","Hunter"],
+  Rogue:["Arcane Trickster","Assassin","Soulknife","Thief"],
+  Sorcerer:["Aberrant Sorcery","Clockwork Sorcery","Draconic Sorcery","Wild Magic Sorcery"],
+  Warlock:["Archfey Patron","Celestial Patron","Fiend Patron","Great Old One Patron"],
+  Wizard:["Abjurer","Diviner","Evoker","Illusionist"]}};
+/* Known auto-calculated uses (formulas use: prof, level, str…cha modifiers) */
+const KNOWN_USES={
+ "Rage":{uses:"level>=17?6:level>=12?5:level>=6?4:level>=3?3:2",recharge:"long"},
+ "Bardic Inspiration":{uses:"max(1,cha)",recharge:"long"},
+ "Channel Divinity":{uses:"level>=18?3:level>=6?2:1",recharge:"short"},
+ "Wild Shape":{uses:"2",recharge:"short"},
+ "Second Wind":{uses:"1",recharge:"short"},
+ "Action Surge":{uses:"level>=17?2:1",recharge:"short"},
+ "Indomitable":{uses:"level>=17?3:level>=13?2:1",recharge:"long"},
+ "Divine Sense":{uses:"1+cha",recharge:"long"},
+ "Lay on Hands":{uses:"level*5",recharge:"long"},
+ "Arcane Recovery":{uses:"1",recharge:"long"},
+ "Natural Recovery":{uses:"1",recharge:"long"},
+ "Stroke of Luck":{uses:"1",recharge:"short"},
+ "Portent":{uses:"level>=14?3:2",recharge:"long"},
+ "Magic Awareness":{uses:"prof",recharge:"long"}};
 const CLASS_SKILL_CHOICES={
  Barbarian:{n:2,from:["animal","athletics","intimidation","nature","perception","survival"]},
  Bard:{n:3,from:"any"},
@@ -260,7 +309,9 @@ let db={characters:[],currentId:null};
 let curTab="main";
 function save(){localStorage.setItem(STORE_KEY,JSON.stringify(db));}
 function load(){try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&d.characters)db=d;}catch(e){}
-  db.characters.forEach(c=>{if(!c.edition)c.edition="2014";});}
+  if(!db.customSubs)db.customSubs=[];
+  db.characters.forEach(c=>{if(!c.edition)c.edition="2014";
+    (c.features||[]).forEach(f=>{if(f.uses&&!f.recharge)f.recharge="long";});});}
 function cur(){return db.characters.find(c=>c.id===db.currentId)||null;}
 
 function newCharacter(){
@@ -369,24 +420,38 @@ $("#btnNewChar").onclick=()=>newCharWizard();
 
 /* ================== CLASS AUTOMATION ENGINE ================== */
 function findBaseClass(ed,name){const lib=classLib(ed);return lib?lib.find(x=>!x.sub&&x.name===name):null;}
-function findSubClass(ed,clsName,subName){const lib=classLib(ed);if(!lib||!subName)return null;
-  return lib.find(x=>x.sub===clsName&&x.name.toLowerCase()===subName.toLowerCase());}
-function expectedClassFeatures(c){ // Map fid -> feature, from SRD lib for this char's classes/levels
+function findSubClass(ed,clsName,subName){if(!subName)return null;
+  const t=normSub(subName);
+  const cust=(db.customSubs||[]).find(x=>(x.edition==="any"||x.edition===ed)&&x.class===clsName&&sameSub(normSub(x.name),t));
+  if(cust)return {name:cust.name,sub:clsName,features:cust.features};
+  const lib=classLib(ed);if(!lib)return null;
+  return lib.find(x=>x.sub===clsName&&sameSub(normSub(x.name),t))||null;}
+const PH_TEXT="⚠️ This subclass isn't in the free SRD, so its text can't be auto-filled. Tap ✏️ and paste this feature from your book — or import a subclass pack (⚙️ → SRD database) to fill it on every character automatically.";
+function expectedClassFeatures(c){ // Map fid -> feature for this char's classes/levels
   const out=new Map();
   for(const k of c.classes){
-    const sources=[findBaseClass(c.edition,k.name),findSubClass(c.edition,k.name,k.subclass)].filter(Boolean);
-    for(const src of sources)for(const f of src.features){
-      const minLv=f.levels[0];
+    const base=findBaseClass(c.edition,k.name);
+    const sub=findSubClass(c.edition,k.name,k.subclass);
+    for(const src of [base,sub].filter(Boolean))for(const f of src.features){
+      const lvls=f.levels&&f.levels.length?f.levels:[1];
+      const minLv=lvls[0];
       if(minLv<=k.level){const fid=k.name+"|"+f.name;
-        out.set(fid,{name:f.name,desc:f.desc+(f.levels.length>1?"\n\n(Gained/improves at levels "+f.levels.join(", ")+".)":""),cls:k.name,minLv,fid});}}}
+        out.set(fid,{name:f.name,desc:(f.desc||"")+(lvls.length>1?"\n\n(Gained/improves at levels "+lvls.join(", ")+".)":""),cls:k.name,minLv,fid,uses:f.uses,recharge:f.recharge});}}
+    if(!sub&&k.subclass){ /* unknown subclass: scaffold placeholders at the right levels */
+      const lvls=(SUBCLASS_LEVELS[c.edition]||{})[k.name]||[];
+      for(const lv of lvls)if(lv<=k.level){
+        const fid=k.name+"|"+k.subclass+"@"+lv;
+        out.set(fid,{name:k.subclass+" — level "+lv+" feature",desc:PH_TEXT,cls:k.name,minLv:lv,fid,ph:true});}}}
   return out;}
 function syncClassFeatures(c){ // additive; returns {added, stale[]}
   if(!SRD.classes)return {added:0,stale:[],noLib:true};
   const expected=expectedClassFeatures(c);let added=0;
   for(const [fid,f] of expected){
     const ex=c.features.find(x=>x.fid===fid||(x.source==="class"&&x.cls===f.cls&&x.name===f.name));
-    if(!ex){c.features.push({name:f.name,desc:f.desc,uses:0,source:"class",fid,cls:f.cls,minLv:f.minLv});added++;}
-    else{ex.desc=f.desc;ex.minLv=f.minLv;ex.fid=fid;} /* keep SRD text current across edition switches */}
+    if(!ex){const au=f.uses?{uses:f.uses,recharge:f.recharge||"long"}:autoUses(f.name,f.desc);
+      c.features.push({name:f.name,desc:f.desc,uses:au.uses,recharge:au.recharge,source:"class",fid,cls:f.cls,minLv:f.minLv,ph:f.ph||undefined});added++;}
+    else{if(!f.ph)ex.desc=f.desc; /* never overwrite text the user pasted into a placeholder */
+      ex.minLv=f.minLv;ex.fid=fid;}}
   const stale=c.features.filter(x=>x.source==="class"&&x.fid&&!expected.has(x.fid));
   c.features.sort((a,b)=>(a.minLv??99)-(b.minLv??99));
   return {added,stale};}
@@ -435,7 +500,7 @@ function newCharWizard(){
      <div><label>Class</label><select id="nw_class" onchange="nwSubs()"></select></div>
      <div><label>Subclass</label><input id="nw_sub" list="nw_subs" placeholder="pick or type any"><datalist id="nw_subs"></datalist></div>
    </div>
-   <p class="dim" style="margin:4px 0 0">The free SRD includes <b>one</b> subclass per class — suggestions appear as you type. Any other subclass (e.g. Assassin) can be typed freely; its features just won't auto-fill.</p>
+   <p class="dim" style="margin:4px 0 0">All official subclasses are listed. The SRD one per class auto-fills full text; the others add feature entries at the correct levels for you to paste from your book (or fill via an imported subclass pack).</p>
    <div class="spacer"></div>
    <label>Level</label><input id="nw_lv" type="number" min="1" max="20" value="1">
    ${hasLib?'<p class="dim">Saving throws, proficiencies, spell slots and all class & subclass features up to your level are added automatically. You pick skills next.</p>'
@@ -448,10 +513,10 @@ function nwClasses(){const ed=nwEdition();const lib=classLib(ed);
   const names=lib?lib.filter(x=>!x.sub).map(x=>x.name):CLASSES.filter(x=>x!=="Other"&&x!=="Artificer");
   $("#nw_class").innerHTML=names.map(n=>`<option>${n}</option>`).join("");
   nwSubs();}
-function nwSubs(){const ed=nwEdition();const lib=classLib(ed);const cls=$("#nw_class").value;
-  const subs=lib?lib.filter(x=>x.sub===cls).map(x=>x.name):[];
+function nwSubs(){const ed=nwEdition();const cls=$("#nw_class").value;
+  const subs=subclassOptions(ed,cls);
   $("#nw_subs").innerHTML=subs.map(n=>`<option value="${esc(n)}">`).join("");
-  $("#nw_sub").placeholder=subs.length?`e.g. ${subs[0]} — or type any`:"pick or type any";}
+  $("#nw_sub").placeholder=subs.length?`e.g. ${subs[0]}…`:"pick or type any";}
 function nwCreate(){
   const c=newCharacter();
   c.name=$("#nw_name").value.trim()||"New Hero";
@@ -508,7 +573,7 @@ function editIdentity(){const c=cur();
      <option value="2024" ${c.edition==="2024"?"selected":""}>📗 5e (2024)</option></select>
    <hr><h3>Classes</h3><div class="dim" style="margin-bottom:6px">Multiclass supported — add rows. Features for new levels are added automatically on save.</div>
    <div id="classRows">${c.classes.map((k,i)=>classRow(k,i)).join("")}</div>
-   <datalist id="subclassList">${(classLib(c.edition)||[]).filter(x=>x.sub).map(x=>`<option value="${esc(x.name)}">`).join("")}</datalist>
+   <datalist id="subclassList">${CLASSES.filter(x=>x!=="Other").flatMap(cl=>subclassOptions(c.edition,cl)).map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
    <button class="btn ghost small" onclick="addClassRow()">＋ Add class</button>
    <hr><button class="btn" style="width:100%" onclick="saveIdentity()">Save</button>`);}
 function classRow(k,i){return `<div class="row" style="margin-bottom:8px" data-cls="${i}">
@@ -648,14 +713,15 @@ function spendHitDie(){const c=cur();
   toast(`<b>Hit die</b><div class="big">+${heal} HP</div><div class="dim">${c.hitDice.die}: ${r} ${fmt(mod(c.abilities.con))} CON</div>`,4000);}
 function shortRest(){const c=cur();
   if(c.spellcasting.pact.max>0){c.spellcasting.pact.used=0;}
-  touch();renderTab();toast("🌙 Short rest — pact slots restored. Spend hit dice to heal.");}
+  let n=0;c.features.forEach(f=>{if(f.uses&&f.recharge==="short"){f.usesLeft=maxUses(c,f);n++;}});
+  touch();renderTab();toast("🌙 Short rest — pact slots"+(n?" and "+n+" feature"+(n>1?"s":""):"")+" restored. Spend hit dice to heal.");}
 function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and half your hit dice."))return;
   const c=cur();c.hp.current=c.hp.max;c.hp.temp=0;
   for(let l=1;l<=9;l++)c.spellcasting.slots[l].used=0;
   c.spellcasting.pact.used=0;
   c.hitDice.used=Math.max(0,c.hitDice.used-Math.max(1,Math.floor(c.hitDice.total/2)));
   c.deathSaves={s:0,f:0};c.exhaustion=Math.max(0,c.exhaustion-1);
-  c.features.forEach(f=>{if(f.uses)f.usesLeft=f.uses;});
+  c.features.forEach(f=>{if(f.uses)f.usesLeft=maxUses(c,f);});
   touch();renderTab();toast("☀️ Long rest complete!");}
 function editAttack(i){const c=cur();const a=i>=0?c.attacks[i]:{name:"",ability:"str",proficient:true,bonusMisc:0,damage:"",type:"",notes:""};
   openModal(`<h2>${i>=0?"Edit":"New"} attack ${XBTN}</h2>
@@ -876,12 +942,15 @@ function renderFeat(){const c=cur();
       <button class="pill" onclick="syncClassFeaturesUI(cur(),false);renderTab()" title="Re-sync class features">🔄</button>
       <button class="pill" onclick="editFeature(-1)">＋ Add</button></div></div>
     ${SRD.classes?"":'<div class="dim" style="margin-bottom:8px">💡 Download the SRD library (⚙️ on home screen) to auto-add class & subclass features.</div>'}
-    ${c.features.length?c.features.map((f,i)=>`<div class="li">
+    ${c.features.length?c.features.map((f,i)=>{const mx=maxUses(c,f);
+      return `<div class="li">
       <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-        <div class="li-title">${esc(f.name)} ${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${f.uses?`<div class="li-sub">${f.usesLeft??f.uses}/${f.uses} uses</div>`:""}</div>
-        ${f.uses?`<button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>`:""}
+        <div class="li-title">${esc(f.name)} ${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${f.ph&&f.desc===PH_TEXT?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">paste text</span>':""}
+          ${mx>0?`<div class="li-sub">${f.usesLeft??mx}/${mx} uses · ${f.recharge==="short"?"🌙 short rest":"☀️ long rest"}</div>`:""}</div>
+        ${mx>0?`<button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>
+        <button class="iconbtn" title="Undo use" onclick="event.stopPropagation();undoFeature(${i})">↩</button>`:""}
         <button class="iconbtn" onclick="event.stopPropagation();editFeature(${i})">✏️</button></div>
-      <div class="li-body"><p>${esc(f.desc||"").replace(/\n+/g,"</p><p>")}</p></div></div>`).join(""):'<div class="empty">No features yet — class features, racial traits, feats…</div>'}
+      <div class="li-body"><p>${esc(f.desc||"").replace(/\n+/g,"</p><p>")}</p></div></div>`;}).join(""):'<div class="empty">No features yet — class features, racial traits, feats…</div>'}
   </div>
   <div class="card"><h2>Proficiencies & languages</h2>
     <label>Armor</label><input value="${esc(c.profs.armor)}" onchange="cur().profs.armor=this.value;touch()"><div class="spacer"></div>
@@ -892,30 +961,75 @@ function renderFeat(){const c=cur();
   <div class="card"><h2>Notes</h2>
     <textarea style="min-height:140px" onchange="cur().notes=this.value;touch()">${esc(c.notes)}</textarea>
   </div>`;}
-function useFeature(i){const f=cur().features[i];
-  if(f.usesLeft===undefined)f.usesLeft=f.uses;
-  if(f.usesLeft<=0){toast("No uses left — long rest to recover");return;}
-  f.usesLeft--;touch();renderTab();toast(esc(f.name)+": "+f.usesLeft+" uses left");}
+function useFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
+  if(f.usesLeft===undefined)f.usesLeft=mx;
+  if(f.usesLeft<=0){toast("No uses left — "+(f.recharge==="short"?"short or long":"long")+" rest to recover");return;}
+  f.usesLeft--;touch();renderTab();toast(esc(f.name)+": "+f.usesLeft+"/"+mx+" left");}
+function undoFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
+  if((f.usesLeft??mx)>=mx){toast("Already at full uses");return;}
+  f.usesLeft=Math.min(mx,(f.usesLeft??mx)+1);touch();renderTab();toast("↩ "+esc(f.name)+": "+f.usesLeft+"/"+mx);}
 function editFeature(i){const c=cur();
-  const f=i>=0?c.features[i]:{name:"",desc:"",uses:0};
+  const f=i>=0?c.features[i]:{name:"",desc:"",uses:0,recharge:"long"};
+  const mx=maxUses(c,f);
   openModal(`<h2>${i>=0?"Edit":"New"} feature ${XBTN}</h2>
    <label>Name</label><input id="ft_name" value="${esc(f.name)}"><div class="spacer"></div>
-   <label>Uses per rest (0 = passive)</label><input id="ft_uses" type="number" min="0" value="${f.uses||0}"><div class="spacer"></div>
+   <div class="grid2">
+    <div><label>Max uses (0 = passive)</label><input id="ft_uses" value="${esc(f.uses||0)}">
+      <div class="dim" style="margin-top:3px">Number or formula: <b>prof</b>, <b>level</b>, <b>str…cha</b> — e.g. "prof", "1+cha", "level/2"${typeof f.uses==="string"?` · now = ${mx}`:""}</div></div>
+    <div><label>Recharges on</label><select id="ft_recharge">
+      <option value="long" ${f.recharge!=="short"?"selected":""}>☀️ Long rest</option>
+      <option value="short" ${f.recharge==="short"?"selected":""}>🌙 Short or long rest</option></select></div>
+   </div><div class="spacer"></div>
    <label>Description</label><textarea id="ft_desc">${esc(f.desc)}</textarea><div class="spacer"></div>
    <div class="row">
    ${i>=0?`<button class="btn danger" onclick="cur().features.splice(${i},1);touch();closeModal();renderTab()">Delete</button>`:""}
    <button class="btn" onclick="saveFeature(${i})">Save</button></div>`);}
 function saveFeature(i){const c=cur();
-  const f={name:$("#ft_name").value.trim()||"Feature",uses:+$("#ft_uses").value||0,desc:$("#ft_desc").value};
+  const raw=$("#ft_uses").value.trim();
+  const f={name:$("#ft_name").value.trim()||"Feature",
+    uses:raw===""||raw==="0"?0:(/^\d+$/.test(raw)?+raw:raw),
+    recharge:$("#ft_recharge").value,desc:$("#ft_desc").value};
   if(i>=0){const old=c.features[i]; /* keep class-feature identity so resync doesn't duplicate */
-    if(old.fid){f.fid=old.fid;f.cls=old.cls;f.minLv=old.minLv;f.source=old.source;}}
-  if(f.uses)f.usesLeft=i>=0?Math.min(c.features[i].usesLeft??f.uses,f.uses):f.uses;
+    if(old.fid){f.fid=old.fid;f.cls=old.cls;f.minLv=old.minLv;f.source=old.source;}
+    if(old.ph&&f.desc!==PH_TEXT)f.ph=undefined;else if(old.ph)f.ph=true;}
+  const mx=maxUses(c,f);
+  if(mx)f.usesLeft=i>=0?Math.min(c.features[i].usesLeft??mx,mx):mx;
   i>=0?c.features[i]=f:c.features.push(f);touch();closeModal();renderTab();}
 
 /* ================== SRD DATABASE (IndexedDB + Open5e) ================== */
 const SRD={spells2014:null,spells2024:null,items:null,classes:null}; window.SRD=SRD; // in-memory cache
 function spellsFor(c){return (c&&c.edition==="2024")?SRD.spells2024:SRD.spells2014;}
 function classLib(ed){if(!SRD.classes)return null;const l=SRD.classes[ed];return (l&&l.length)?l:null;}
+function normSub(s){return String(s||"").toLowerCase()
+  .replace(/^(path of the |path of |college of |circle of the |circle of |way of the |way of |warrior of the |warrior of |oath of the |oath of |school of |the )/,"")
+  .replace(/( domain| patron| sorcery| bloodline)$/,"").trim();}
+function sameSub(a,b){return !!a&&!!b&&(a===b||a.includes(b)||b.includes(a));}
+function subclassOptions(ed,cls){ /* catalog + custom packs + SRD lib, deduped */
+  const out=[],seen=new Set();
+  const add=n=>{const k=normSub(n);if(k&&!seen.has(k)){seen.add(k);out.push(n);}};
+  ((SUBCLASS_CATALOG[ed]||{})[cls]||[]).forEach(add);
+  (db.customSubs||[]).filter(x=>(x.edition==="any"||x.edition===ed)&&x.class===cls).forEach(x=>add(x.name));
+  (classLib(ed)||[]).filter(x=>x.sub===cls).forEach(x=>add(x.name));
+  return out;}
+function maxUses(c,f){ /* uses: number, or formula with prof, level, str…cha */
+  if(!f||!f.uses)return 0;
+  if(typeof f.uses==="number")return f.uses;
+  let e=String(f.uses).toLowerCase();
+  const vars={prof:profBonus(c),pb:profBonus(c),level:totalLevel(c),lv:totalLevel(c),
+    str:mod(c.abilities.str),dex:mod(c.abilities.dex),con:mod(c.abilities.con),
+    int:mod(c.abilities.int),wis:mod(c.abilities.wis),cha:mod(c.abilities.cha)};
+  e=e.replace(/[a-z]+/g,w=>w in vars?vars[w]:((w==="min"||w==="max")?"Math."+w:w));
+  if(/[a-z_]/i.test(e.replace(/Math\.(min|max)/g,"")))return 0;
+  try{const v=Function('"use strict";return ('+e+')')();return Math.max(0,Math.floor(+v||0));}catch(err){return 0;}}
+function autoUses(name,desc){ /* best-effort detection of uses & recharge */
+  const n=String(name||"").toLowerCase();
+  for(const k in KNOWN_USES){const kk=k.toLowerCase();
+    if(n===kk||n.startsWith(kk+" ")||n.startsWith(kk+":"))return {...KNOWN_USES[k]};}
+  const d=String(desc||"").toLowerCase();
+  if(/equal to your proficiency bonus/.test(d))return {uses:"prof",recharge:/short or long rest/.test(d)?"short":"long"};
+  if(/(can't|cannot) use (it|this feature) again until you finish a short or long rest|finish a short or long rest before you can use/.test(d))return {uses:1,recharge:"short"};
+  if(/(can't|cannot) use (it|this feature) again until you finish a long rest|finish a long rest before you can use/.test(d))return {uses:1,recharge:"long"};
+  return {uses:0,recharge:"long"};}
 function build2014Classes(feats){ /* 5e-bits feature list -> class library */
   const map=new Map();
   for(const f of feats){
@@ -1021,8 +1135,49 @@ function openSrdManager(){const {sp14,sp24,it,cl14,cl24}=srdCounts();
    Classes & features (2014): ${cl14?"✅ "+cl14:"❌"}<br>Classes & features (2024): ${cl24?"✅ "+cl24:"❌"}<br>Items: ${it?"✅ "+it:"❌"}</p>
    <span id="srdProgress" class="dim"></span><div class="spacer"></div>
    <button class="btn" style="width:100%" onclick="syncSrd()">${sp14?"🔄 Re-download / update":"⬇️ Download now (~4 MB)"}</button>
-   <div class="spacer"></div>
+   <hr><h3>Custom subclass packs</h3>
+   <p class="dim">Non-SRD subclasses can't be bundled (copyright), but you can build them once from your books and reuse them on every character. A pack is a JSON file — export one filled character's subclass as a starting point, or write it by hand (see README).</p>
+   <p>${(db.customSubs||[]).length?`📦 ${db.customSubs.length} custom subclass(es): ${db.customSubs.map(x=>esc(x.name)).join(", ")}`:"No packs imported yet."}</p>
+   <div class="row">
+     <button class="btn ghost small" onclick="importSubPack()">📥 Import pack</button>
+     <button class="btn ghost small" onclick="exportSubPacks()" ${(db.customSubs||[]).length?"":"disabled"}>📤 Export all</button>
+     <button class="btn ghost small" onclick="exportSubTemplate()">📄 Template</button>
+   </div>
+   <hr>
    <p class="dim">Data: Open5e API & 5e-bits SRD database · 5e SRD © Wizards of the Coast, CC-BY-4.0 / OGL.</p></div>`);}
+function importSubPack(){
+  const inp=document.createElement("input");inp.type="file";inp.accept=".json,application/json";
+  inp.onchange=()=>{const file=inp.files[0];if(!file)return;
+    const rd=new FileReader();
+    rd.onload=()=>{try{
+      let data=JSON.parse(rd.result);if(!Array.isArray(data))data=[data];
+      let n=0;
+      for(const p of data){
+        if(!p||typeof p.name!=="string"||typeof p.class!=="string"||!Array.isArray(p.features))throw new Error("bad pack");
+        const pack={edition:["2014","2024","any"].includes(p.edition)?p.edition:"any",class:p.class,name:p.name,
+          features:p.features.map(f=>({name:String(f.name||"Feature"),desc:String(f.desc||""),
+            levels:(Array.isArray(f.levels)?f.levels:[f.level||1]).map(Number).filter(x=>x>=1&&x<=20),
+            uses:f.uses??0,recharge:f.recharge==="short"?"short":"long"}))};
+        if(!pack.features.length)throw new Error("no features");
+        db.customSubs=db.customSubs.filter(x=>!(x.class===pack.class&&normSub(x.name)===normSub(pack.name)&&x.edition===pack.edition));
+        db.customSubs.push(pack);n++;}
+      save();toast("📦 "+n+" subclass pack"+(n>1?"s":"")+" imported — resync characters to apply (Features tab 🔄)");
+      openSrdManager();
+    }catch(err){toast("⚠️ Invalid pack file: "+esc(err.message));}};
+    rd.readAsText(file);};
+  inp.click();}
+function exportSubPacks(){
+  const blob=new Blob([JSON.stringify(db.customSubs,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="subclass-packs.json";a.click();}
+function exportSubTemplate(){
+  const tpl=[{edition:"2014",class:"Rogue",name:"Assassin",
+    features:[{name:"Bonus Proficiencies",levels:[3],uses:0,recharge:"long",desc:"PASTE the feature text from your book here."},
+      {name:"Assassinate",levels:[3],uses:0,recharge:"long",desc:"PASTE…"},
+      {name:"Level 9 feature",levels:[9],uses:0,recharge:"long",desc:"PASTE…"},
+      {name:"Level 13 feature",levels:[13],uses:0,recharge:"long",desc:"PASTE…"},
+      {name:"Level 17 feature",levels:[17],uses:0,recharge:"long",desc:"PASTE…"}]}];
+  const blob=new Blob([JSON.stringify(tpl,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="subclass-template.json";a.click();}
 
 /* ================== SRD BROWSERS ================== */
 let browserFilter={q:"",lv:"all",cls:"all"};
