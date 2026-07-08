@@ -1071,7 +1071,8 @@ async function fetchAllPages(url,onProgress){let out=[],page=1;
     if(onProgress)onProgress(out.length,j.count);page++;if(page>60)break;}
   return out;}
 async function syncSrd(){
-  const set=t=>{const el=$("#srdProgress");if(el)el.textContent=t;};
+  let step="starting";
+  const set=t=>{if(t)step=t;const el=$("#srdProgress");if(el)el.textContent=t;};
   try{
     set("Downloading 2014 spells…");
     const raw=await fetchAllPages("https://api.open5e.com/v1/spells/?document__slug=wotc-srd&limit=100",(n,t)=>set(`2014 spells ${n}/${t}…`));
@@ -1098,10 +1099,12 @@ async function syncSrd(){
     /* Open5e v2 has no 2014 class data — use the 5e-bits SRD database (the JSON behind dnd5eapi.co) */
     set("Downloading 2014 class features…");
     let feats14=null;
-    for(const u of ["https://raw.githubusercontent.com/5e-bits/5e-database/main/src/2014/5e-SRD-Features.json",
+    for(const u of ["https://raw.githubusercontent.com/5e-bits/5e-database/main/src/2014/en/5e-SRD-Features.json",
+                    "https://cdn.jsdelivr.net/gh/5e-bits/5e-database@main/src/2014/en/5e-SRD-Features.json",
+                    "https://raw.githubusercontent.com/5e-bits/5e-database/main/src/2014/5e-SRD-Features.json",
                     "https://cdn.jsdelivr.net/gh/5e-bits/5e-database@main/src/2014/5e-SRD-Features.json"]){
       try{const r=await fetch(u);if(r.ok){feats14=await r.json();if(Array.isArray(feats14))break;feats14=null;}}catch(err){}}
-    if(!feats14)throw new Error("2014 class features download failed");
+    if(!feats14)throw new Error("2014 class features download failed (all mirrors)");
     classes["2014"]=build2014Classes(feats14);
     await idbSet("classes",classes);SRD.classes=classes;
     set("Downloading weapons & armor…");
@@ -1120,7 +1123,8 @@ async function syncSrd(){
     await idbSet("items",items);SRD.items=items;
     set("");renderSrdStatus();toast("✅ SRD database ready — works offline now");
     if($("#srdMgr"))openSrdManager();
-  }catch(e){set("");toast("⚠️ Download failed — check your connection ("+esc(e.message)+")");}}
+  }catch(e){const at=step;set("");
+    toast("⚠️ Download failed at \""+esc(at)+"\" — "+esc(e.message)+". Anything already downloaded is kept.",6000);}}
 function srdCounts(){return {sp14:SRD.spells2014?SRD.spells2014.length:0,sp24:SRD.spells2024?SRD.spells2024.length:0,
   it:SRD.items?SRD.items.length:0,
   cl14:SRD.classes?(SRD.classes["2014"]||[]).length:0,cl24:SRD.classes?(SRD.classes["2024"]||[]).length:0};}
@@ -1181,6 +1185,7 @@ function exportSubTemplate(){
 
 /* ================== SRD BROWSERS ================== */
 let browserFilter={q:"",lv:"all",cls:"all"};
+let _dbT=null;function debounced(fn){clearTimeout(_dbT);_dbT=setTimeout(fn,140);} /* smooth typing over big lists */
 function openSpellBrowser(){
   const lib=spellsFor(cur());
   if(!lib){openModal(`<h2>Spell library ${XBTN}</h2><p class="dim">The SRD library for this edition isn't downloaded yet.</p>
@@ -1189,7 +1194,7 @@ function openSpellBrowser(){
   browserFilter={q:"",lv:"all",cls:"all"};
   const classes=["all","Bard","Cleric","Druid","Paladin","Ranger","Sorcerer","Warlock","Wizard"];
   openModal(`<h2>Spell library <span class="tag">${esc(EDITIONS[cur().edition])}</span> ${XBTN}</h2>
-   <div class="searchwrap"><input id="spq" placeholder="🔍 Search ${lib.length} spells…" oninput="browserFilter.q=this.value;renderSpellResults()">
+   <div class="searchwrap"><input id="spq" placeholder="🔍 Search ${lib.length} spells…" oninput="browserFilter.q=this.value;debounced(renderSpellResults)">
    <div class="filter-pills" id="lvPills">${["all",0,1,2,3,4,5,6,7,8,9].map(l=>`<button class="pill ${l==="all"?"on":""}" onclick="browserFilter.lv='${l}';$$('#lvPills .pill').forEach(p=>p.classList.remove('on'));this.classList.add('on');renderSpellResults()">${l==="all"?"All":l===0?"Cantrip":"Lv "+l}</button>`).join("")}</div>
    <div class="filter-pills" id="clsPills">${classes.map(k=>`<button class="pill ${k==="all"?"on":""}" onclick="browserFilter.cls='${k}';$$('#clsPills .pill').forEach(p=>p.classList.remove('on'));this.classList.add('on');renderSpellResults()">${k==="all"?"All classes":k}</button>`).join("")}</div></div>
    <div id="spResults"></div>`);
@@ -1198,21 +1203,28 @@ function renderSpellResults(){const q=browserFilter.q.toLowerCase();
   const list=(spellsFor(cur())||[]).filter(s=>
     (browserFilter.lv==="all"||s.level===+browserFilter.lv)&&
     (browserFilter.cls==="all"||s.classes.some(c=>c.includes(browserFilter.cls)))&&
-    (!q||s.name.toLowerCase().includes(q))).slice(0,80);
-  $("#spResults").innerHTML=list.map((s,i)=>`<div class="li">
+    (!q||s.name.toLowerCase().includes(q)))
+    .sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name));
+  let html=`<div class="dim" style="margin:2px 0 4px">${list.length} spell${list.length===1?"":"s"}</div>`,lastLv=-1;
+  if(!list.length)html="";
+  for(const s of list){
+    if(browserFilter.lv==="all"&&s.level!==lastLv){lastLv=s.level;
+      html+=`<div class="dim" style="margin:12px 0 6px;font-weight:700;letter-spacing:.05em">${s.level===0?"CANTRIPS":"LEVEL "+s.level}</div>`;}
+    html+=`<div class="li">
     <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
       <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}
         <div class="li-sub">${s.level===0?"Cantrip":"Level "+s.level} · ${esc(s.school)}</div></div>
       <button class="btn small" onclick="event.stopPropagation();addSrdSpell('${jstr(s.name)}')">Add</button></div>
     <div class="li-body"><div class="dim">${esc(s.time)} · ${esc(s.range)} · ${esc(s.components)} · ${esc(s.duration)}<br>${esc(s.classes.join(", "))}</div>
       <p>${esc(s.desc).replace(/\n+/g,"</p><p>")}</p>${s.higher?`<p><b>At higher levels.</b> ${esc(s.higher)}</p>`:""}</div>
-  </div>`).join("")||'<div class="empty">No matches</div>';}
+  </div>`;}
+  $("#spResults").innerHTML=html||'<div class="empty">No matches</div>';}
 function addSrdSpell(name){const s=(spellsFor(cur())||[]).find(x=>x.name===name);if(!s)return;
   const sc=cur().spellcasting;
   if(sc.spells.some(x=>x.name===s.name)){toast("Already known");return;}
   sc.spells.push({name:s.name,level:s.level,school:s.school,time:s.time,range:s.range,components:s.components,
     duration:s.duration,conc:s.conc,ritual:s.ritual,prepared:false,desc:s.desc,higher:s.higher,source:"srd"});
-  touch();toast("✨ "+esc(s.name)+" added");}
+  touch();renderTab();toast("✨ "+esc(s.name)+" added");}
 function openItemBrowser(){
   if(!SRD.items){openModal(`<h2>Item library ${XBTN}</h2><p class="dim">The SRD library isn't downloaded yet.</p>
     <span id="srdProgress" class="dim"></span><div class="spacer"></div>
@@ -1220,15 +1232,15 @@ function openItemBrowser(){
   browserFilter={q:"",cat:"all"};
   const cats=["all","Weapon","Armor","Gear","Magic"];
   openModal(`<h2>Item library ${XBTN}</h2>
-   <div class="searchwrap"><input id="itq" placeholder="🔍 Search ${SRD.items.length} items…" oninput="browserFilter.q=this.value;renderItemResults()">
+   <div class="searchwrap"><input id="itq" placeholder="🔍 Search ${SRD.items.length} items…" oninput="browserFilter.q=this.value;debounced(renderItemResults)">
    <div class="filter-pills" id="catPills">${cats.map(k=>`<button class="pill ${k==="all"?"on":""}" onclick="browserFilter.cat='${k}';$$('#catPills .pill').forEach(p=>p.classList.remove('on'));this.classList.add('on');renderItemResults()">${k==="all"?"All":k}</button>`).join("")}</div></div>
    <div id="itResults"></div>`);
   renderItemResults();}
 function renderItemResults(){const q=browserFilter.q.toLowerCase();
   const list=SRD.items.filter(it=>
     (browserFilter.cat==="all"||it.cat.startsWith(browserFilter.cat))&&
-    (!q||it.name.toLowerCase().includes(q))).slice(0,80);
-  $("#itResults").innerHTML=list.map(it=>`<div class="li">
+    (!q||it.name.toLowerCase().includes(q)));
+  $("#itResults").innerHTML=(list.length?`<div class="dim" style="margin:2px 0 4px">${list.length} item${list.length===1?"":"s"}</div>`:"")+list.map(it=>`<div class="li">
     <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
       <div class="li-title">${esc(it.name)}<div class="li-sub">${esc(it.cat)}${it.cost?" · "+esc(it.cost):""}${it.weight?" · "+it.weight+" lb":""}</div></div>
       <button class="btn small" onclick="event.stopPropagation();addSrdItem('${jstr(it.name)}')">Add</button></div>
@@ -1239,7 +1251,7 @@ function addSrdItem(name){const it=SRD.items.find(x=>x.name===name);if(!it)retur
   const ex=inv.items.find(x=>x.name===it.name);
   if(ex){ex.qty=(+ex.qty||1)+1;}
   else inv.items.push({name:it.name,qty:1,weight:it.weight||0,cost:it.cost||"",equipped:false,attuned:false,desc:it.desc||"",notes:""});
-  touch();toast("🎒 "+esc(it.name)+" added");}
+  touch();renderTab();toast("🎒 "+esc(it.name)+" added");}
 
 /* ================== INIT (v1.0) ================== */
 (async function init(){
