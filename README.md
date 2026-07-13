@@ -16,6 +16,20 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Automatic class setup**: the creation wizard sets saving throws, armor/weapon proficiencies, hit die and spell slots from your class, walks you through your class skill choices, and adds every class & subclass feature up to your level. Level up later and new features appear automatically (with cleanup prompts if you change class or edition).
 - Multiclass support; proficiency bonus, hit dice and combined caster slots follow your levels.
 
+### New in v1.1
+
+- **Effects engine**: features, feats and equipped items can carry automatic bonuses (to saving throws, skills, ability scores, AC, initiative, speed, max HP, passive senses, weapon attack/damage, spell DC/attack). Values can be formulas (`prof`, `max(1,cha)`, `2*level`). Known features (Aura of Protection, fighting styles, Alert, Tough…) get their effects attached automatically.
+- **Breakdown popups**: tap any save/skill name, AC, initiative, speed, HP "Edit", spell DC, or an attack's name to see exactly where the number comes from.
+- **Equipment classes**: items are typed (Weapon / Armor / Shield / …) with structured data. Equip armor & shield → AC is calculated automatically (incl. Unarmored Defense, Defense style, magic +N); equip a weapon → it's offered as an attack with the right ability (finesse/ranged aware).
+- **Split damage**: attacks support multiple damage parts (e.g. 1d8 slashing + 2d6 fire), rolled and totaled per type.
+- **Feats**: built-in picker with ~40 feats; +1 ability / skills / Resilient choices prompted and bonuses applied automatically. ASI-or-feat prompt appears when you level past an ASI level.
+- **Active vs passive**: the Features tab is split into ⚡ Active (actions, limited uses) and 🧬 Passive (always on).
+- **Slot-powered abilities**: features that expend spell slots (Divine Smite & co.) are detected and get a Cast button in the Spells tab that spends the slot level you choose.
+- **Channel Divinity** is always added for Paladins & Clerics with correct per-class/per-edition uses (incl. 2024 "regain 1 on short rest").
+- **Level-up spell choice**: when a level grants new spells/cantrips or unlocks a new slot level, a picker opens with your class's spell list and the suggested number to learn/prepare.
+- **Resistances & Immunities**: a Main-tab section tracks damage resistances / immunities / vulnerabilities (tap to cycle) and condition immunities.
+- **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
+
 ## Get it on your phone (one-time setup, ~10 minutes)
 
 The app must be served over HTTPS to install. Easiest free way: **GitHub Pages**.
