@@ -117,6 +117,11 @@ hr{border:none;border-top:1px solid var(--line);margin:12px 0}
 #toast.show{display:block;animation:pop .18s ease-out}
 @keyframes pop{from{transform:translateX(-50%) scale(.9);opacity:0}}
 #toast .big{font-size:26px;font-weight:800;color:var(--accent2)}
+/* 🎆 lucky 14 */
+.fw14{position:relative;display:inline-block;animation:fwglow 1.2s ease-in-out infinite}
+.fw14 .sp{position:absolute;left:50%;top:50%;font-size:15px;pointer-events:none;animation:fwpop 1.1s ease-out infinite}
+@keyframes fwpop{0%{transform:translate(-50%,-50%) scale(.2);opacity:0}25%{opacity:1}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.3);opacity:0}}
+@keyframes fwglow{0%,100%{text-shadow:0 0 6px var(--gold)}50%{text-shadow:0 0 18px var(--gold),0 0 30px var(--accent2)}}
 
 /* character list */
 .charcard{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:10px;cursor:pointer}
@@ -297,8 +302,15 @@ const EFFECT_GROUPS=[
  ["Combat",[["ac","Armor Class"],["init","Initiative"],["speed","Speed"],["hpmax","Max HP"],["passive","Passive senses"],
   ["atk.all","All weapon attack rolls"],["atk.melee","Melee attack rolls"],["atk.ranged","Ranged attack rolls"],
   ["dmg.all","All weapon damage"],["dmg.melee","Melee damage"],["dmg.ranged","Ranged damage"]]],
- ["Spellcasting",[["spell.dc","Spell save DC"],["spell.atk","Spell attack rolls"]]]];
+ ["Spellcasting",[["spell.dc","Spell save DC"],["spell.atk","Spell attack rolls"]]],
+ ["Resistances & immunities",[...DMG_TYPES.map(t=>["resist."+t,"Resist "+t]),...DMG_TYPES.map(t=>["immune."+t,"Immune to "+t]),...DMG_TYPES.map(t=>["vuln."+t,"Vulnerable to "+t])]],
+ ["Condition immunities",CONDITIONS.map(cd=>["condimm."+cd,"Immune: "+cd])],
+ ["Custom defenses (type the text as value)",[["custom.resist","Custom resistance…"],["custom.immune","Custom immunity…"],["custom.vuln","Custom vulnerability…"]]]];
 const EFFECT_LABELS=Object.fromEntries(EFFECT_GROUPS.flatMap(g=>g[1]));
+const isDefTarget=t=>/^(resist|immune|vuln|condimm)\./.test(t||"");
+const fxLabel=e=>{
+  if(/^custom\./.test(e.t||""))return ({resist:"Resistant to",immune:"Immune to",vuln:"Vulnerable to"}[e.t.split(".")[1]]||"")+" “"+esc(String(e.v))+"”";
+  return esc(EFFECT_LABELS[e.t]||e.t)+(isDefTarget(e.t)?"":" "+esc(String(e.v)));};
 /* Auto-attached effects for well-known features (matched on feature name) */
 const KNOWN_EFFECTS=[
  {re:/aura of protection/i,e:[{t:"save.all",v:"max(1,cha)"}]},
@@ -339,6 +351,145 @@ const CD_OPTIONS={
   Cleric:{_base:["Divine Spark","Turn Undead"],life:["Preserve Life"],light:["Radiance of the Dawn"],
    trickery:["Invoke Duplicity"],war:["Guided Strike","War God's Blessing"]}}};
 function normCD(s){return String(s||"").toLowerCase().replace(/^channel divinity[:\s—-]*/,"").trim();}
+/* Built-in subclasses (mechanical summaries in our own words — official book text can't be bundled; paste it via ✏️ if you want the exact wording) */
+const BUILTIN_SUBS=[
+ {edition:"2014",class:"Paladin",name:"Oath of the Ancients",features:[
+  {name:"Oath Spells",levels:[3],desc:"(Summary) Your oath grants spells that are always prepared and don't count against your prepared total: Ensnaring Strike & Speak with Animals (3rd), Misty Step & Moonbeam (5th), Plant Growth & Protection from Energy (9th), Ice Storm & Stoneskin (13th), Commune with Nature & Tree Stride (17th).\n\nThey are added to your Spells tab automatically when the SRD library is downloaded."},
+  {name:"Channel Divinity: Nature's Wrath",levels:[3],kindHint:"action",desc:"(Summary) Invoke primeval forces to ensnare a foe: one creature within 10 ft you can see must succeed on a Strength or Dexterity saving throw (its choice) against your spell save DC or be restrained by spectral vines. It repeats the save at the end of each of its turns."},
+  {name:"Channel Divinity: Turn the Faithless",levels:[3],kindHint:"action",desc:"(Summary) Utter ancient words painful to fey and fiends: each fey or fiend within 30 ft that can hear you must make a Wisdom saving throw or be turned for 1 minute or until it takes damage. A turned creature must move away and can't take reactions or willingly approach within 30 ft. It also can't hide its true form while turned."},
+  {name:"Aura of Warding",levels:[7],desc:"(Summary) Ancient magic wards you: you and friendly creatures within 10 ft of you (30 ft at level 18) have resistance to damage from spells.",fx:[{t:"custom.resist",v:"damage from spells (aura, allies within 10 ft)"}]},
+  {name:"Undying Sentinel",levels:[15],uses:1,recharge:"long",kindHint:"passive",desc:"(Summary) When you are reduced to 0 HP but not killed outright, you drop to 1 HP instead (once per long rest). You also suffer none of the drawbacks of old age and can't be aged magically."},
+  {name:"Elder Champion",levels:[20],uses:1,recharge:"long",kindHint:"action",desc:"(Summary) Action: assume the form of an ancient force of nature for 1 minute — regain 10 HP at the start of each of your turns, cast paladin spells with a casting time of 1 action as a bonus action, and enemies within 10 ft have disadvantage on saves against your paladin spells and Channel Divinity (once per long rest)."}]},
+ {edition:"2024",class:"Paladin",name:"Oath of the Ancients",features:[
+  {name:"Oath Spells",levels:[3],desc:"(Summary) Your oath grants always-prepared spells at levels 3/5/9/13/17 (Ensnaring Strike, Speak with Animals; Misty Step, Moonbeam; Plant Growth, Protection from Energy; Ice Storm, Stoneskin; Commune with Nature, Tree Stride). Added to your Spells tab automatically when the SRD library is downloaded."},
+  {name:"Channel Divinity: Nature's Wrath",levels:[3],kindHint:"action",desc:"(Summary) Conjure spectral vines around nearby creatures: targets of your choice within 15 ft must succeed on a Strength saving throw against your spell save DC or be restrained for 1 minute (repeat save at end of turns)."},
+  {name:"Aura of Warding",levels:[7],desc:"(Summary) You and allies in your aura have resistance to Necrotic, Psychic and Radiant damage.",fx:[{t:"custom.resist",v:"necrotic, psychic & radiant (aura)"}]},
+  {name:"Undying Sentinel",levels:[15],uses:1,recharge:"long",kindHint:"passive",desc:"(Summary) When reduced to 0 HP but not killed outright, drop to 1 HP instead and regain HP equal to 3 × your paladin level (once per long rest). You don't suffer drawbacks of old age and can't be aged magically."},
+  {name:"Elder Champion",levels:[20],uses:1,recharge:"long",kindHint:"action",desc:"(Summary) Bonus action: transform for 1 minute — regain 10 HP at the start of your turns, cast paladin spells with a 1-action casting time as a bonus action, and enemies within your aura have disadvantage on saves against your spells and Channel Divinity (once per long rest, or expend a level 5 spell slot to restore)."}]}];
+/* Oath spells auto-added as always-prepared (all SRD spells; 2014 lists, reused for 2024) */
+const SUBCLASS_SPELLS={
+ "Paladin|ancients":{3:["Ensnaring Strike","Speak with Animals"],5:["Misty Step","Moonbeam"],9:["Plant Growth","Protection from Energy"],13:["Ice Storm","Stoneskin"],17:["Commune with Nature","Tree Stride"]},
+ "Paladin|devotion":{3:["Protection from Evil and Good","Sanctuary"],5:["Lesser Restoration","Zone of Truth"],9:["Beacon of Hope","Dispel Magic"],13:["Freedom of Movement","Guardian of Faith"],17:["Commune","Flame Strike"]},
+ "Paladin|vengeance":{3:["Bane","Hunter's Mark"],5:["Hold Person","Misty Step"],9:["Haste","Protection from Energy"],13:["Banishment","Dimension Door"],17:["Hold Monster","Scrying"]}};
+/* Races (2014 SRD): ability increases applied as automatic effects; traits become features. 2024: increases come from backgrounds, traits still apply. */
+const RACES=[
+ {name:"Dwarf (Hill)",speed:25,asi:{con:2,wis:1},traits:[
+  {name:"Darkvision",desc:"You can see in dim light within 60 feet as if it were bright light, and in darkness as if it were dim light (shades of grey)."},
+  {name:"Dwarven Resilience",desc:"Advantage on saving throws against poison; resistance against poison damage.",fx:[{t:"resist.poison",v:1}]},
+  {name:"Stonecunning",desc:"Double proficiency on History checks related to stonework."},
+  {name:"Dwarven Toughness",desc:"Your hit point maximum increases by 1 per level.",fx:[{t:"hpmax",v:"level"}]}]},
+ {name:"Dwarf (Mountain)",speed:25,asi:{con:2,str:2},traits:[
+  {name:"Darkvision",desc:"See in dim light within 60 ft as bright, darkness as dim."},
+  {name:"Dwarven Resilience",desc:"Advantage on saves vs poison; resistance to poison damage.",fx:[{t:"resist.poison",v:1}]},
+  {name:"Stonecunning",desc:"Double proficiency on History checks related to stonework."},
+  {name:"Dwarven Armor Training",desc:"Proficiency with light and medium armor."}]},
+ {name:"Elf (High)",speed:30,asi:{dex:2,int:1},traits:[
+  {name:"Darkvision",desc:"See in dim light within 60 ft as bright, darkness as dim."},
+  {name:"Keen Senses",desc:"Proficiency in Perception.",skill:"perception"},
+  {name:"Fey Ancestry",desc:"Advantage on saves against being charmed; magic can't put you to sleep."},
+  {name:"Trance",desc:"You don't sleep; 4 hours of semiconscious meditation suffice."},
+  {name:"High Elf Cantrip",desc:"You know one wizard cantrip of your choice (Intelligence is the casting ability) — add it in the Spells tab."}]},
+ {name:"Elf (Wood)",speed:35,asi:{dex:2,wis:1},traits:[
+  {name:"Darkvision",desc:"See in dim light within 60 ft as bright, darkness as dim."},
+  {name:"Keen Senses",desc:"Proficiency in Perception.",skill:"perception"},
+  {name:"Fey Ancestry",desc:"Advantage on saves against being charmed; magic can't put you to sleep."},
+  {name:"Trance",desc:"You don't sleep; 4 hours of meditation suffice."},
+  {name:"Mask of the Wild",desc:"You can hide when only lightly obscured by natural phenomena."}]},
+ {name:"Elf (Drow)",speed:30,asi:{dex:2,cha:1},traits:[
+  {name:"Superior Darkvision",desc:"Darkvision 120 ft."},
+  {name:"Keen Senses",desc:"Proficiency in Perception.",skill:"perception"},
+  {name:"Fey Ancestry",desc:"Advantage on saves against being charmed; magic can't put you to sleep."},
+  {name:"Sunlight Sensitivity",desc:"Disadvantage on attacks and Perception (sight) when you or the target is in direct sunlight."},
+  {name:"Drow Magic",desc:"Dancing Lights cantrip; Faerie Fire at 3rd level, Darkness at 5th (1/long rest each, Cha)."}]},
+ {name:"Halfling (Lightfoot)",size:"Small",speed:25,asi:{dex:2,cha:1},traits:[
+  {name:"Lucky",desc:"Reroll 1s on d20 attack rolls, checks and saves (use the new roll)."},
+  {name:"Brave",desc:"Advantage on saves against being frightened."},
+  {name:"Halfling Nimbleness",desc:"Move through the space of larger creatures."},
+  {name:"Naturally Stealthy",desc:"You can hide behind creatures one size larger than you."}]},
+ {name:"Halfling (Stout)",size:"Small",speed:25,asi:{dex:2,con:1},traits:[
+  {name:"Lucky",desc:"Reroll 1s on d20 attack rolls, checks and saves."},
+  {name:"Brave",desc:"Advantage on saves against being frightened."},
+  {name:"Halfling Nimbleness",desc:"Move through the space of larger creatures."},
+  {name:"Stout Resilience",desc:"Advantage on saves vs poison; resistance to poison damage.",fx:[{t:"resist.poison",v:1}]}]},
+ {name:"Human",speed:30,asi:{str:1,dex:1,con:1,int:1,wis:1,cha:1},traits:[]},
+ {name:"Dragonborn",speed:30,asi:{str:2,cha:1},choose:{dragon:true},traits:[
+  {name:"Draconic Ancestry",desc:"Choose a dragon type — it sets your breath weapon shape and your damage resistance."},
+  {name:"Breath Weapon",desc:"Action: exhale destructive energy (2d6, +1d6 at levels 6/11/16; Dex or Con save DC 8 + Con mod + prof for half). Type/shape from your ancestry.",uses:1,recharge:"short",kind:"action"}]},
+ {name:"Gnome (Rock)",size:"Small",speed:25,asi:{int:2,con:1},traits:[
+  {name:"Darkvision",desc:"See in dim light within 60 ft as bright, darkness as dim."},
+  {name:"Gnome Cunning",desc:"Advantage on Intelligence, Wisdom and Charisma saves against magic."},
+  {name:"Artificer's Lore",desc:"Double proficiency on History checks about magic items, alchemy or technology."},
+  {name:"Tinker",desc:"Construct tiny clockwork devices (see book)."}]},
+ {name:"Half-Elf",speed:30,asi:{cha:2},choose:{abl2:true,skills:2},traits:[
+  {name:"Darkvision",desc:"See in dim light within 60 ft as bright, darkness as dim."},
+  {name:"Fey Ancestry",desc:"Advantage on saves against being charmed; magic can't put you to sleep."},
+  {name:"Skill Versatility",desc:"Proficiency in two skills of your choice."}]},
+ {name:"Half-Orc",speed:30,asi:{str:2,con:1},traits:[
+  {name:"Darkvision",desc:"See in dim light within 60 ft as bright, darkness as dim."},
+  {name:"Menacing",desc:"Proficiency in Intimidation.",skill:"intimidation"},
+  {name:"Relentless Endurance",desc:"When reduced to 0 HP but not killed outright, drop to 1 HP instead.",uses:1,recharge:"long",kind:"passive"},
+  {name:"Savage Attacks",desc:"On a melee weapon crit, roll one extra weapon damage die."}]},
+ {name:"Tiefling",speed:30,asi:{cha:2,int:1},traits:[
+  {name:"Darkvision",desc:"See in dim light within 60 ft as bright, darkness as dim."},
+  {name:"Hellish Resistance",desc:"Resistance to fire damage.",fx:[{t:"resist.fire",v:1}]},
+  {name:"Infernal Legacy",desc:"Thaumaturgy cantrip; Hellish Rebuke at 3rd level, Darkness at 5th (1/long rest each, Cha)."}]},
+ {name:"Frost Giant",size:"Large",speed:30,asi:{str:2,con:1},traits:[
+  {name:"Giant Stature",desc:"You are Large. Your weapons and gear are sized for you; you occupy a 10-ft space and can wield oversized weapons at your DM's discretion."},
+  {name:"Powerful Build",desc:"You count as one size larger when determining carrying capacity and the weight you can push, drag or lift (doubled in this app)."},
+  {name:"Frost Resilience",desc:"You have resistance to cold damage.",fx:[{t:"resist.cold",v:1}]},
+  {name:"Born of Ice",desc:"You are acclimated to extreme cold and ignore the drawbacks of frigid environments and high altitude."}]}];
+function findRace(name){const n=String(name||"").toLowerCase().trim();if(!n)return null;
+  return RACES.find(r=>r.name.toLowerCase()===n)
+    ||RACES.find(r=>r.name.toLowerCase().replace(/\s*\(.*\)/,"")===n)
+    ||RACES.find(r=>r.name.toLowerCase().includes(n))||null;}
+function applyRace(c,prevRace){ /* returns number of traits added; queues choice prompts */
+  if(prevRace!==undefined&&prevRace!==c.race)c.features=c.features.filter(f=>f.source!=="race");
+  const r=findRace(c.race);if(!r)return 0;
+  let added=0;
+  if(c.edition!=="2024"&&r.asi&&!c.features.some(f=>f.source==="race"&&/^Ability Score Increase/.test(f.name))){
+    c.features.push({name:"Ability Score Increase ("+r.name+")",source:"race",kind:"passive",
+      desc:"Racial ability score increase — applied automatically to your scores.",
+      effects:Object.entries(r.asi).map(([a,v])=>({t:"abl."+a,v}))});added++;}
+  if(r.speed)c.speed=r.speed;
+  if(r.size&&c.details)c.details.size=r.size;
+  for(const t of r.traits||[]){
+    if(c.features.some(f=>f.source==="race"&&f.name===t.name))continue;
+    if(t.skill)c.skills[t.skill]=Math.max(c.skills[t.skill]||0,1);
+    c.features.push({name:t.name,source:"race",desc:t.desc,uses:t.uses||0,recharge:t.recharge||"long",
+      kind:t.kind,effects:(t.fx||[]).map(e=>({...e}))});added++;}
+  if(r.choose&&added){
+    if(r.choose.dragon)qPush(()=>raceDragonPrompt());
+    if(r.choose.abl2)qPush(()=>raceAbl2Prompt(r.name));
+    if(r.choose.skills)qPush(()=>raceSkillsPrompt(r.choose.skills));}
+  return added;}
+function raceDragonPrompt(){
+  const types=[["Black/Copper","acid"],["Blue/Bronze","lightning"],["Brass/Gold/Red","fire"],["Silver/White","cold"],["Green","poison"]];
+  openModal(`<h2>Draconic Ancestry — choose your dragon ${XBTN}</h2>
+   <p class="dim">Sets your breath weapon damage type and your resistance.</p>
+   <div class="cond-grid">${types.map(([l,t])=>`<button class="pill" onclick="raceDragonPick('${t}','${l}')">${l} — ${t}</button>`).join("")}</div>`);}
+function raceDragonPick(ty,label){const c=cur();
+  const f=c.features.find(x=>x.source==="race"&&x.name==="Draconic Ancestry");
+  if(f){f.effects=[{t:"resist."+ty,v:1}];f.desc="Dragon: "+label+". Breath weapon deals "+ty+" damage; you have resistance to "+ty+" damage.";f.fxEdited=true;}
+  touch();toast("🐉 "+label+" ancestry — resist "+ty);qNext();}
+function raceAbl2Prompt(rn){
+  openModal(`<h2>${esc(rn)} — +1 to two abilities ${XBTN}</h2>
+   <div class="grid2">
+    <div><label>First +1</label><select id="ra1">${ABILITIES.filter(a=>a!=="cha").map(a=>`<option value="${a}">${ABL_NAMES[a]}</option>`).join("")}</select></div>
+    <div><label>Second +1</label><select id="ra2">${ABILITIES.filter(a=>a!=="cha").map(a=>`<option value="${a}" ${a==="dex"?"selected":""}>${ABL_NAMES[a]}</option>`).join("")}</select></div></div>
+   <div class="spacer"></div><button class="btn" style="width:100%" onclick="raceAbl2Pick()">Apply</button>`);}
+function raceAbl2Pick(){const c=cur();
+  const f=c.features.find(x=>x.source==="race"&&/^Ability Score Increase/.test(x.name));
+  const a1=$("#ra1").value,a2=$("#ra2").value;
+  if(f){f.effects.push({t:"abl."+a1,v:1});if(a2!==a1)f.effects.push({t:"abl."+a2,v:1});f.fxEdited=true;}
+  touch();toast("💪 +1 "+a1.toUpperCase()+", +1 "+a2.toUpperCase());qNext();}
+function raceSkillsPrompt(n){
+  openModal(`<h2>Skill Versatility — pick ${n} skills ${XBTN}</h2>
+   <div id="raceSk">${SKILLS.map(([k,nm])=>`<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;text-transform:none;font-size:15px;color:var(--txt);border-bottom:1px solid var(--line)">
+     <input type="checkbox" value="${k}" ${cur().skills[k]>=1?"disabled":""}> ${nm}${cur().skills[k]>=1?' <span class="dim">(already proficient)</span>':""}</label>`).join("")}</div>
+   <div class="spacer"></div><button class="btn" style="width:100%" onclick="raceSkillsPick(${n})">Done</button>`);}
+function raceSkillsPick(n){const c=cur();
+  $$("#raceSk input").filter(b=>b.checked).slice(0,n).forEach(b=>c.skills[b.value]=Math.max(c.skills[b.value]||0,1));
+  touch();toast("🎯 Skills added");qNext();}
 /* Feats: ed = "any"|"2014"|"2024"; choose = {abl:[...]} pick +1 ability, {ablAny:1}, {skills:n}, {resilient:true}; effects auto-applied */
 const FEATS=[
  {name:"Actor",ed:"any",fx:[{t:"abl.cha",v:1}],desc:"+1 Charisma. Advantage on Deception/Performance checks to pass yourself off as another person; mimic speech or sounds."},
@@ -414,6 +565,8 @@ function rollExpr(expr){ /* "2d6+3" etc */
 const STORE_KEY="grimoire_v1";
 let db={characters:[],currentId:null};
 let curTab="main";
+let defsOpen=false; /* Resistances & Immunities toggle on Main */
+let detOpen=false; /* Details & flavour toggle on Main */
 function save(){localStorage.setItem(STORE_KEY,JSON.stringify(db));}
 function load(){try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&d.characters)db=d;}catch(e){}
   if(!db.customSubs)db.customSubs=[];
@@ -421,7 +574,9 @@ function load(){try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&d.
 function migrate(c){ /* upgrade older saves in place */
   if(!c.edition)c.edition="2014";
   if(!c.acMode)c.acMode="manual";
-  if(!c.defenses)c.defenses={dmg:{},condimm:[]};
+  if(!c.defenses)c.defenses={dmg:{},condimm:[],custom:[]};
+  if(!c.defenses.custom)c.defenses.custom=[];
+  if(!c.details)c.details={size:"Medium",height:"",weight:"",age:"",eyes:"",hair:"",skin:"",flavor:""};
   (c.features||[]).forEach(f=>{
     if(f.uses&&!f.recharge)f.recharge="long";
     if(!f.effects){f.effects=autoEffects(f.name,f.desc);}
@@ -441,11 +596,12 @@ function newCharacter(){
     hp:{max:10,current:10,temp:0}, hitDice:{die:"d10",total:1,used:0},
     ac:10, initMisc:0, speed:30,
     deathSaves:{s:0,f:0}, inspiration:false, conditions:[], exhaustion:0,
-    defenses:{dmg:{},condimm:[]},
+    defenses:{dmg:{},condimm:[],custom:[]},
     attacks:[],
     spellcasting:{ability:"int",slots:Object.fromEntries([1,2,3,4,5,6,7,8,9].map(l=>[l,{max:0,used:0}])),pact:{level:1,max:0,used:0},spells:[]},
     inventory:{items:[],currency:{cp:0,sp:0,ep:0,gp:0,pp:0}},
     features:[], profs:{armor:"",weapons:"",tools:"",languages:""}, notes:"",
+    details:{size:"Medium",height:"",weight:"",age:"",eyes:"",hair:"",skin:"",flavor:""},
     color:AVATAR_COLORS[Math.floor(Math.random()*AVATAR_COLORS.length)], updated:Date.now()};
 }
 function totalLevel(c){return c.classes.reduce((a,k)=>a+(+k.level||0),0)||1;}
@@ -521,12 +677,13 @@ function acBreakdown(c){
   return {rows,total:rows.reduce((s,r)=>s+r[1],0)};}
 function acVal(c){return acBreakdown(c).total;}
 /* ---- item enrichment: guess category, structure & bonuses from name/description ---- */
-const ITEM_CATS=["Gear","Weapon","Armor","Shield","Wondrous","Potion","Other"];
+const ITEM_CATS=["Gear","Weapon","Ammo","Armor","Shield","Wondrous","Potion","Other"];
 function enrichItem(it,force){
   if(!it.effects)it.effects=[];
   const nm=String(it.name||""),d=String(it.desc||"");
   if(!it.cat||force){
-    if(/^shield\b/i.test(nm)&&!/of missile/i.test(nm))it.cat="Shield";
+    if(/\b(arrows?|bolts?|sling bullets?|blowgun needles?|ammunition)\b/i.test(nm))it.cat="Ammo";
+    else if(/^shield\b/i.test(nm)&&!/of missile/i.test(nm))it.cat="Shield";
     else if(/\bAC[: ]\s*\d|^AC\b/i.test(d)||/\b(plate|chain mail|chain shirt|scale mail|half plate|breastplate|studded leather|leather armor|hide armor|ring mail|splint|padded)\b/i.test(nm))it.cat="Armor";
     else if(/\d+d\d+[^.]*damage/i.test(d)||/\b(sword|axe|mace|bow|dagger|spear|hammer|flail|glaive|halberd|javelin|lance|maul|morningstar|pike|rapier|scimitar|sickle|trident|whip|blowgun|crossbow|sling|club|quarterstaff|greatclub|handaxe)\b/i.test(nm))it.cat="Weapon";
     else if(/potion|elixir/i.test(nm))it.cat="Potion";
@@ -542,9 +699,15 @@ function enrichItem(it,force){
     const m=/(\d+d\d+)\s+(\w+)\s+damage/i.exec(d);
     it.weapon={dmg:m?m[1]:"1d6",type:m?m[2]:"",
       kind:/\b(ammunition|range \(?\d|bow|crossbow|sling|blowgun|dart)\b/i.test(d+" "+nm)&&!/thrown/i.test(d)?"ranged":"melee",
-      finesse:/finesse/i.test(d)};}
+      finesse:/finesse/i.test(d)};
+    const extra=/(?:plus|and) an extra (\d+d\d+)\s+(\w+)\s+damage|\+\s*(\d+d\d+)\s+(\w+)\s+damage/i.exec(d);
+    if(extra)it.weapon.parts=[{d:it.weapon.dmg,t:it.weapon.type},{d:extra[1]||extra[3],t:extra[2]||extra[4]}];}
+  if(it.weapon&&!(it.weapon.parts&&it.weapon.parts.length))
+    it.weapon.parts=[{d:it.weapon.dmg||"1d6",t:it.weapon.type||""}];
   if(!it.effects.length){ /* known magic item bonuses */
     if(/^(ring|cloak) of protection/i.test(nm))it.effects=[{t:"ac",v:1},{t:"save.all",v:1}];
+    const rm=/(?:of|to) (\w+) resistance|resistance to (\w+)/i.exec(nm);
+    if(rm){const ty=(rm[1]||rm[2]||"").toLowerCase();if(DMG_TYPES.includes(ty))it.effects=[{t:"resist."+ty,v:1}];}
     if(/rod of the pact keeper|wand of the war mage/i.test(nm)&&it.magic)it.effects=[{t:"spell.atk",v:it.magic},...(/pact keeper/i.test(nm)?[{t:"spell.dc",v:it.magic}]:[])];
     if(/amulet of health/i.test(nm))it.desc=(it.desc||"")+"\n(Sets CON to 19 — adjust manually if needed.)";
     if(/bracers of defense/i.test(nm))it.effects=[{t:"ac",v:2,when:"unarmored"}];}
@@ -636,10 +799,10 @@ function fxRow(e){return `<div class="row fxrow" style="margin-bottom:6px">
 function fxEditor(effects){return `<label>Effects — automatic bonuses</label>
   <div id="fxList">${(effects||[]).map(fxRow).join("")}</div>
   <button class="btn ghost small" type="button" onclick="$('#fxList').insertAdjacentHTML('beforeend',fxRow())">＋ Add bonus</button>
-  <div class="dim" style="margin-top:3px">Value: number or formula (<b>prof</b>, <b>level</b>, <b>str…cha</b>) — e.g. "1", "max(1,cha)". Applied automatically to the target roll.</div>`;}
+  <div class="dim" style="margin-top:3px">Value: number or formula (<b>prof</b>, <b>level</b>, <b>str…cha</b>) — e.g. "1", "max(1,cha)". For resistances/immunities just pick the target — no value needed.</div>`;}
 function fxCollect(){return $$("#fxList .fxrow").map(r=>{
   const t=r.querySelector(".fxT").value,vr=r.querySelector(".fxV").value.trim();
-  if(!vr)return null;
+  if(!vr){if(isDefTarget(t))return {t,v:1};return null;}
   return {t,v:/^-?\d+$/.test(vr)?+vr:vr};}).filter(Boolean);}
 
 /* ================== NAVIGATION ================== */
@@ -669,16 +832,22 @@ $("#modalBg").onclick=e=>{if(e.target.id==="modalBg")closeModal();};
 const XBTN='<button class="iconbtn" onclick="closeModal()">✕</button>';
 
 /* ================== DICE ROLLER ================== */
+function bigHtml(n){ /* total display; 14 gets fireworks 🎆 */
+  if(+n!==14)return `<div class="big">${n}</div>`;
+  const sp=[[-34,-20],[32,-24],[-38,16],[36,14],[0,-34],[-16,28],[18,26]]
+    .map(([x,y],i)=>`<span class="sp" style="--dx:${x}px;--dy:${y}px;animation-delay:${(i*0.13).toFixed(2)}s">🎆</span>`).join("");
+  return `<div class="big fw14">✨14✨${sp}</div>`;}
 let lastRoll=null;
-function d20Roll(label,modifier){
-  const r1=rollDie(20),r2=rollDie(20);lastRoll={label,modifier,r1,r2};
+function d20Roll(label,modifier,note){
+  const r1=rollDie(20),r2=rollDie(20);lastRoll={label,modifier,r1,r2,note:note||""};
   showRoll("normal");}
 function showRoll(adv){
-  const {label,modifier,r1,r2}=lastRoll;
+  const {label,modifier,r1,r2,note}=lastRoll;
   let use=r1;if(adv==="adv")use=Math.max(r1,r2);if(adv==="dis")use=Math.min(r1,r2);
   const crit=use===20?' <span class="good">CRIT!</span>':use===1?' <span class="warn">Nat 1</span>':"";
-  toast(`<div><b>${esc(label)}</b>${crit}</div><div class="big">${use+modifier}</div>
+  toast(`<div><b>${esc(label)}</b>${crit}</div>${bigHtml(use+modifier)}
     <div class="dim">d20: ${adv==="normal"?use:r1+" / "+r2} ${fmt(modifier)}</div>
+    ${note?`<div class="dim">${note}</div>`:""}
     <div class="dice-adv">
       <button class="pill ${adv==="normal"?"on":""}" onclick="showRoll('normal')">Normal</button>
       <button class="pill ${adv==="adv"?"on":""}" onclick="showRoll('adv')">Advantage</button>
@@ -686,7 +855,7 @@ function showRoll(adv){
     </div>`,6000);}
 function damageRoll(label,expr){const r=rollExpr(expr);
   if(!r){toast("Can't parse dice: "+esc(expr));return;}
-  toast(`<div><b>${esc(label)}</b></div><div class="big">${r.total}</div><div class="dim">${esc(r.detail)}</div>`,5000);}
+  toast(`<div><b>${esc(label)}</b></div>${bigHtml(r.total)}<div class="dim">${esc(r.detail)}</div>`,5000);}
 $("#btnDice").onclick=()=>{
   openModal(`<h2>Dice roller ${XBTN}</h2>
     <div class="grid3">${[4,6,8,10,12,20].map(d=>`<button class="btn ghost" onclick="damageRoll('d${d}','1d${d}')">d${d}</button>`).join("")}</div>
@@ -730,6 +899,8 @@ function findSubClass(ed,clsName,subName){if(!subName)return null;
   const t=normSub(subName);
   const cust=(db.customSubs||[]).find(x=>(x.edition==="any"||x.edition===ed)&&x.class===clsName&&sameSub(normSub(x.name),t));
   if(cust)return {name:cust.name,sub:clsName,features:cust.features};
+  const bi=BUILTIN_SUBS.find(x=>(x.edition==="any"||x.edition===ed)&&x.class===clsName&&sameSub(normSub(x.name),t));
+  if(bi)return {name:bi.name,sub:clsName,features:bi.features};
   const lib=classLib(ed);if(!lib)return null;
   return lib.find(x=>x.sub===clsName&&sameSub(normSub(x.name),t))||null;}
 const PH_TEXT="⚠️ This subclass isn't in the free SRD, so its text can't be auto-filled. Tap ✏️ and paste this feature from your book — or import a subclass pack (⚙️ → SRD database) to fill it on every character automatically.";
@@ -742,7 +913,7 @@ function expectedClassFeatures(c){ // Map fid -> feature for this char's classes
       const lvls=f.levels&&f.levels.length?f.levels:[1];
       const minLv=lvls[0];
       if(minLv<=k.level){const fid=k.name+"|"+f.name;
-        out.set(fid,{name:f.name,desc:(f.desc||"")+(lvls.length>1?"\n\n(Gained/improves at levels "+lvls.join(", ")+".)":""),cls:k.name,minLv,fid,uses:f.uses,recharge:f.recharge});}}
+        out.set(fid,{name:f.name,desc:(f.desc||"")+(lvls.length>1?"\n\n(Gained/improves at levels "+lvls.join(", ")+".)":""),cls:k.name,minLv,fid,uses:f.uses,recharge:f.recharge,fx:f.fx,kindHint:f.kindHint});}}
     /* guaranteed features (e.g. Paladin Channel Divinity) even if the library misses them */
     for(const f of EXTRA_CLASS_FEATURES[k.name]||[]){
       const fid=k.name+"|"+f.name;
@@ -779,24 +950,39 @@ function syncClassFeatures(c){ // additive; returns {added, stale[]}
     const ex=c.features.find(x=>x.fid===fid||(x.source==="class"&&x.cls===f.cls&&x.name===f.name));
     if(!ex){const au=classUses(c,f.cls,f.name,f.desc,f.uses,f.recharge);
       c.features.push({name:f.name,desc:f.desc,uses:au.uses,recharge:au.recharge,source:"class",fid,cls:f.cls,minLv:f.minLv,ph:f.ph||undefined,
-        kind:f.kindHint||undefined,effects:autoEffects(f.name,f.desc),slotCast:detectSlotCast(f.desc)||undefined});added++;}
+        kind:f.kindHint||undefined,effects:f.fx?JSON.parse(JSON.stringify(f.fx)):autoEffects(f.name,f.desc),slotCast:detectSlotCast(f.desc)||undefined});added++;}
     else{if(!f.ph)ex.desc=f.desc; /* never overwrite text the user pasted into a placeholder */
       ex.minLv=f.minLv;ex.fid=fid;
       if(!ex.fxEdited){
         if(CLASS_USES[f.cls+"|"+f.name]){const au=classUses(c,f.cls,f.name,f.desc);ex.uses=au.uses;ex.recharge=au.recharge;}
         if(/^channel divinity[:\s]/i.test(ex.name)&&!/^channel divinity$/i.test(ex.name.trim())&&ex.uses)ex.uses=0; /* options use the shared pool */
-        if(!(ex.effects||[]).length)ex.effects=autoEffects(ex.name,ex.desc);
+        if(!(ex.effects||[]).length)ex.effects=f.fx?JSON.parse(JSON.stringify(f.fx)):autoEffects(ex.name,ex.desc);
         if(ex.slotCast===undefined&&detectSlotCast(ex.desc))ex.slotCast=true;}}}
   const stale=c.features.filter(x=>x.source==="class"&&x.fid&&!expected.has(x.fid));
   c.features.sort((a,b)=>(a.minLv??99)-(b.minLv??99));
-  return {added,stale};}
+  const spellsAdded=addSubclassSpells(c);
+  return {added,stale,spellsAdded};}
+function addSubclassSpells(c){ /* oath/domain spells -> always prepared, from the SRD library */
+  const lib=spellsFor(c);if(!lib)return 0;let n=0;
+  for(const k of c.classes){
+    if(!k.subclass)continue;
+    const t=SUBCLASS_SPELLS[k.name+"|"+normSub(k.subclass)];
+    if(!t)continue;
+    for(const lv in t){
+      if(+lv>k.level)continue;
+      for(const nm of t[lv]){
+        if(c.spellcasting.spells.some(x=>x.name.toLowerCase()===nm.toLowerCase()))continue;
+        const s=lib.find(x=>x.name.toLowerCase()===nm.toLowerCase());
+        if(s){c.spellcasting.spells.push({name:s.name,level:s.level,school:s.school,time:s.time,range:s.range,components:s.components,
+          duration:s.duration,conc:s.conc,ritual:s.ritual,prepared:true,always:true,desc:s.desc,higher:s.higher,source:"srd"});n++;}}}}
+  return n;}
 function syncClassFeaturesUI(c,quiet){
   const r=syncClassFeatures(c);
   if(r.noLib){if(!quiet)toast("Download the SRD library first (⚙️) for automatic class features");return;}
   if(r.stale.length&&confirm(`Remove ${r.stale.length} class feature(s) that no longer match your class/level/edition?\n(${r.stale.map(f=>f.name).slice(0,6).join(", ")}${r.stale.length>6?"…":""})`)){
     c.features=c.features.filter(x=>!r.stale.includes(x));}
   touch();
-  if(r.added&&!quiet)toast("📜 "+r.added+" class feature"+(r.added>1?"s":"")+" added");}
+  if((r.added||r.spellsAdded)&&!quiet)toast("📜 "+(r.added?r.added+" class feature"+(r.added>1?"s":""):"")+(r.added&&r.spellsAdded?" + ":"")+(r.spellsAdded?r.spellsAdded+" oath/domain spell"+(r.spellsAdded>1?"s":"")+" (always prepared)":"")+" added");}
 function applyClassBasics(c){ // saves, hit die, profs — from lib if present, else built-in tables
   const main=c.classes[0];if(!main)return;
   const base=findBaseClass(c.edition,main.name);
@@ -826,6 +1012,10 @@ function newCharWizard(){
   const hasLib=!!SRD.classes;
   openModal(`<h2>New character ${XBTN}</h2>
    <label>Name</label><input id="nw_name" placeholder="e.g. Kass Shadowstep"><div class="spacer"></div>
+   <label>Race / species</label><input id="nw_race" list="raceList" placeholder="pick or type any">
+   <datalist id="raceList">${RACES.map(r=>`<option value="${esc(r.name)}">`).join("")}</datalist>
+   <p class="dim" style="margin:4px 0 0">Known races auto-apply ability increases, speed, resistances and traits (with prompts for choices). Anything else is fine too — just no automation.</p>
+   <div class="spacer"></div>
    <label>Rules edition</label>
    <div class="row" id="nw_ed">
      <button class="pill on" data-ed="2014" onclick="nwEd(this)">📕 5e (2014)</button>
@@ -855,12 +1045,15 @@ function nwSubs(){const ed=nwEdition();const cls=$("#nw_class").value;
 function nwCreate(){
   const c=newCharacter();
   c.name=$("#nw_name").value.trim()||"New Hero";
+  c.race=$("#nw_race").value.trim();
   c.edition=nwEdition();
   c.classes=[{name:$("#nw_class").value,subclass:$("#nw_sub").value.trim(),level:Math.min(20,Math.max(1,+$("#nw_lv").value||1))}];
   applyClassBasics(c);
   autoSlotsFromClasses(c);
   syncClassFeatures(c);
-  db.characters.push(c);save();
+  db.characters.push(c);db.currentId=c.id;
+  applyRace(c); /* race choice prompts join the level-up queue */
+  save();
   nwSkillPick(c);}
 function nwSkillPick(c){
   const cfg=CLASS_SKILL_CHOICES[c.classes[0].name];
@@ -899,7 +1092,8 @@ $("#btnSettings").onclick=()=>openSrdManager();
 function editIdentity(){const c=cur();
   openModal(`<h2>Edit character ${XBTN}</h2>
    <label>Name</label><input id="edName" value="${esc(c.name)}"><div class="spacer"></div>
-   <div class="grid2"><div><label>Race / species</label><input id="edRace" value="${esc(c.race)}"></div>
+   <div class="grid2"><div><label>Race / species</label><input id="edRace" value="${esc(c.race)}" list="raceList">
+   <datalist id="raceList">${RACES.map(r=>`<option value="${esc(r.name)}">`).join("")}</datalist></div>
    <div><label>Background</label><input id="edBg" value="${esc(c.background)}"></div></div><div class="spacer"></div>
    <div class="grid2"><div><label>Alignment</label><input id="edAlign" value="${esc(c.alignment)}"></div>
    <div><label>XP</label><input id="edXp" type="number" value="${c.xp||0}"></div></div>
@@ -920,6 +1114,7 @@ function classRow(k,i){return `<div class="row" style="margin-bottom:8px" data-c
 function addClassRow(){$("#classRows").insertAdjacentHTML("beforeend",classRow({name:"Wizard",subclass:"",level:1},uid()));}
 function saveIdentity(){const c=cur();
   const prev={levels:Object.fromEntries(c.classes.map(k=>[k.name,+k.level||0])),maxLv:maxSlotLv(c)};
+  const prevRace=c.race;
   c.name=$("#edName").value.trim()||"Unnamed";c.race=$("#edRace").value.trim();
   c.background=$("#edBg").value.trim();c.alignment=$("#edAlign").value.trim();c.xp=+$("#edXp").value||0;
   const edSel=$("#edEdition");const editionChanged=edSel&&edSel.value!==c.edition;
@@ -933,6 +1128,8 @@ function saveIdentity(){const c=cur();
   c.hitDice.total=totalLevel(c);
   if(c.spellcasting.auto!==false)autoSlotsFromClasses(c);
   syncClassFeaturesUI(c,false);
+  const rAdded=applyRace(c,prevRace);
+  if(rAdded)toast("🧬 "+rAdded+" racial trait"+(rAdded>1?"s":"")+" applied");
   touch();closeModal();renderTab();
   checkLevelUpChoices(c,prev);}
 
@@ -1000,23 +1197,60 @@ function renderMain(){const c=cur();const pb=profBonus(c);
   </div>
 
   <div class="card">
-    <div class="section-head"><h2 style="margin:0">Resistances & Immunities</h2><button class="pill" onclick="editDefenses()">Edit</button></div>
-    ${defSummary(c)||'<div class="empty" style="padding:6px">None — tap Edit to set damage resistances, immunities, vulnerabilities and condition immunities</div>'}
+    <div class="section-head" onclick="defsOpen=!defsOpen;renderTab()" style="cursor:pointer;margin-bottom:${defsOpen?"10px":"0"}">
+      <h2 style="margin:0">${defsOpen?"▾":"▸"} Resistances & Immunities ${defCount(c)?`<span class="tag">${defCount(c)}</span>`:""}</h2>
+      ${defsOpen?`<button class="pill" onclick="event.stopPropagation();editDefenses()">Edit</button>`:""}
+    </div>
+    ${defsOpen?(defSummary(c)||'<div class="empty" style="padding:6px">None — tap Edit to set damage resistances, immunities, vulnerabilities and condition immunities</div>'):""}
   </div>
 
   <div class="card">
     <div class="section-head"><h2 style="margin:0">Attacks</h2><button class="pill" onclick="editAttack(-1)">＋ Add</button></div>
     <div>${c.attacks.length?c.attacks.map((a,i)=>{
       const hit=attackBonus(c,a);
+      const am=ammoItem(c,a);
       return `<div class="li"><div class="li-head">
         <div class="li-title" onclick="explainAttack(${i})" style="cursor:pointer">${esc(a.name)} <span class="tag">${a.kind==="ranged"?"ranged":"melee"}</span>
-          <div class="li-sub">${attackDmgLabel(c,a)} ${a.notes?"· "+esc(a.notes):""}</div></div>
-        <button class="btn ghost small" onclick="d20Roll('${jstr(a.name)} attack',${hit})">${fmt(hit)}</button>
+          <div class="li-sub">${attackDmgLabel(c,a)} ${a.notes?"· "+esc(a.notes):""}${am?` · 🏹 ${+am.qty||0} ${esc(am.name)}`:""}</div></div>
+        <button class="btn ghost small" onclick="rollAttackHit(${i})">${fmt(hit)}</button>
         ${(a.dmgParts||[]).length?`<button class="btn ghost small" onclick="rollAttackDamage(${i})">DMG</button>`:""}
         <button class="iconbtn" onclick="editAttack(${i})">✏️</button>
       </div></div>`;}).join(""):'<div class="empty">No attacks yet — add manually or equip a weapon in Items</div>'}</div>
   </div>
+
+  <div class="card">
+    <div class="section-head" onclick="detOpen=!detOpen;renderTab()" style="cursor:pointer;margin-bottom:${detOpen?"10px":"0"}">
+      <h2 style="margin:0">${detOpen?"▾":"▸"} Details & flavour</h2>
+      ${detOpen?`<span class="dim">${esc(c.details.size||"")}</span>`:""}
+    </div>
+    ${detOpen?`
+    <div class="grid2">
+      <div><label>Size</label><select onchange="cur().details.size=this.value;touch()">${["Tiny","Small","Medium","Large","Huge","Gargantuan"].map(s=>`<option ${c.details.size===s?"selected":""}>${s}</option>`).join("")}</select></div>
+      <div><label>Height</label><input value="${esc(c.details.height)}" onchange="cur().details.height=this.value;touch()" placeholder="e.g. 5'9&quot; / 175 cm"></div>
+    </div><div class="spacer"></div>
+    <div class="grid3">
+      <div><label>Weight</label><input value="${esc(c.details.weight)}" onchange="cur().details.weight=this.value;touch()"></div>
+      <div><label>Age</label><input value="${esc(c.details.age)}" onchange="cur().details.age=this.value;touch()"></div>
+      <div><label>Eyes</label><input value="${esc(c.details.eyes)}" onchange="cur().details.eyes=this.value;touch()"></div>
+    </div><div class="spacer"></div>
+    <div class="grid2">
+      <div><label>Hair</label><input value="${esc(c.details.hair)}" onchange="cur().details.hair=this.value;touch()"></div>
+      <div><label>Skin</label><input value="${esc(c.details.skin)}" onchange="cur().details.skin=this.value;touch()"></div>
+    </div><div class="spacer"></div>
+    <label>Flavour — appearance, personality, quirks</label>
+    <textarea onchange="cur().details.flavor=this.value;touch()">${esc(c.details.flavor)}</textarea>`:""}
+  </div>
   ${nextXp!==null?`<p class="dim center">XP ${c.xp||0} / ${nextXp} for level ${totalLevel(c)+1}</p>`:""}`;}
+function ammoItem(c,a){if(!a.ammoId)return null;
+  return (c.inventory.items||[]).find(it=>(it.id||it.name)===a.ammoId)||null;}
+function rollAttackHit(i){const c=cur();const a=c.attacks[i];
+  const am=ammoItem(c,a);
+  let note="";
+  if(am){
+    if((+am.qty||0)<=0){toast("🏹 Out of "+esc(am.name)+"!");return;}
+    am.qty=(+am.qty||0)-1;touch();renderTab();
+    note="🏹 "+am.qty+" "+esc(am.name)+" left";}
+  d20Roll(a.name+" attack",attackBonus(c,a),note);}
 function attackBonus(c,a){let b=+a.bonusMisc||0;
   if(a.ability&&a.ability!=="none")b+=amod(c,a.ability);
   if(a.proficient)b+=profBonus(c);
@@ -1035,7 +1269,7 @@ function rollAttackDamage(i){const c=cur();const a=c.attacks[i];
     const extra=j===0?attackDmgExtra(c,a):0;
     const t=r.total+extra;total+=t;
     lines.push(`<div><b>${t}</b> ${esc(p.t||"damage")} <span class="dim">${esc(r.detail)}${extra?" "+fmt(extra):""}</span></div>`);});
-  toast(`<div><b>${esc(a.name)} damage</b></div><div class="big">${total}</div>`+lines.join(""),6000);}
+  toast(`<div><b>${esc(a.name)} damage</b></div>`+bigHtml(total)+lines.join(""),6000);}
 function editAbilities(){const c=cur();
   openModal(`<h2>Ability scores ${XBTN}</h2><div class="grid3">
     ${ABILITIES.map(a=>`<div><label>${ABL_NAMES[a]}</label><input type="number" id="ab_${a}" value="${c.abilities[a]}" min="1" max="30"></div>`).join("")}
@@ -1063,22 +1297,65 @@ function toggleCondition(cd){const c=cur();
   c.conditions.includes(cd)?c.conditions=c.conditions.filter(x=>x!==cd):c.conditions.push(cd);
   touch();renderTab();}
 /* ---- resistances / immunities / vulnerabilities ---- */
-function defSummary(c){const d=c.defenses||{dmg:{},condimm:[]};
+function grantedDefs(c){ /* from item/feature effects like resist.fire */
+  const out=[];
+  activeEffects(c).forEach(e=>{const m=/^(resist|immune|vuln)\.([a-z]+)$/.exec(e.t||"");
+    if(m)out.push({s:m[1],t:m[2],src:e.src});});
+  return out;}
+function grantedCondImm(c){ /* from item/feature effects like condimm.Charmed */
+  const out=[];
+  activeEffects(c).forEach(e=>{const m=/^condimm\.(\w+)$/.exec(e.t||"");
+    if(m)out.push({t:m[1],src:e.src});});
+  return out;}
+function grantedCustomDefs(c){ /* from item/feature effects like custom.resist with free text value */
+  const out=[];
+  activeEffects(c).forEach(e=>{const m=/^custom\.(resist|immune|vuln)$/.exec(e.t||"");
+    if(m&&e.v)out.push({s:m[1],t:String(e.v),src:e.src});});
+  return out;}
+function defCount(c){const d=c.defenses||{dmg:{},condimm:[],custom:[]};
+  const g=grantedDefs(c),gc=grantedCondImm(c),gx=grantedCustomDefs(c);
+  return Object.keys(d.dmg).length+(d.custom||[]).length+(d.condimm||[]).length
+    +new Set(g.map(x=>x.s+x.t)).size+new Set(gc.map(x=>x.t)).size+new Set(gx.map(x=>x.s+x.t)).size;}
+function defSummary(c){const d=c.defenses||{dmg:{},condimm:[],custom:[]};
+  const g=grantedDefs(c);
   const rows=[];
+  const gx=grantedCustomDefs(c);
   for(const key of ["resist","immune","vuln"]){
-    const list=DMG_TYPES.filter(t=>d.dmg[t]===key);
+    const manual=DMG_TYPES.filter(t=>d.dmg[t]===key);
+    const granted=[...new Set(g.filter(x=>x.s===key&&!manual.includes(x.t)).map(x=>x.t))].map(t=>t+' <span style="color:var(--gold)">✦</span>');
+    const custom=(d.custom||[]).filter(x=>x.s===key).map(x=>"<i>"+esc(x.t)+"</i>");
+    const grantedCustom=[...new Set(gx.filter(x=>x.s===key).map(x=>x.t))].map(t=>'<i>'+esc(t)+'</i> <span style="color:var(--gold)">✦</span>');
+    const list=[...manual,...granted,...custom,...grantedCustom];
     if(list.length)rows.push(`<div style="margin:3px 0"><span style="color:${DEF_STATES[key][1]};font-weight:600">${DEF_STATES[key][0]}:</span> ${list.join(", ")}</div>`);}
-  if((d.condimm||[]).length)rows.push(`<div style="margin:3px 0"><span style="color:var(--blue);font-weight:600">Condition immune:</span> ${d.condimm.join(", ")}</div>`);
+  const manualCI=d.condimm||[];
+  const grantedCI=[...new Set(grantedCondImm(c).filter(x=>!manualCI.includes(x.t)).map(x=>x.t))].map(t=>t+' <span style="color:var(--gold)">✦</span>');
+  const ci=[...manualCI,...grantedCI];
+  if(ci.length)rows.push(`<div style="margin:3px 0"><span style="color:var(--blue);font-weight:600">Condition immune:</span> ${ci.join(", ")}</div>`);
   return rows.join("");}
 function editDefenses(){const c=cur();const d=c.defenses;
+  const g=grantedDefs(c);
   openModal(`<h2>Resistances & Immunities ${XBTN}</h2>
    <p class="dim">Tap a damage type to cycle: none → <span style="color:var(--green)">resistant</span> → <span style="color:var(--gold)">immune</span> → <span style="color:var(--red)">vulnerable</span>.</p>
    <div class="cond-grid">${DMG_TYPES.map(t=>{const s=d.dmg[t];
      const st=s?`border-color:${DEF_STATES[s][1]};color:${DEF_STATES[s][1]}`:"";
      return `<button class="pill" style="${st}" onclick="cycleDef('${t}')">${t}${s?" · "+DEF_STATES[s][0][0]:""}</button>`;}).join("")}</div>
+   ${g.length?`<p class="dim" style="margin-top:8px">✦ From items & features (automatic): ${[...new Set(g.map(x=>DEF_STATES[x.s][0]+" "+x.t+" ("+esc(x.src)+")"))].join(" · ")}</p>`:""}
+   <hr><h3>Custom / flavour</h3>
+   <p class="dim">Non-standard entries — e.g. "bludgeoning from nonmagical attacks".</p>
+   ${(d.custom||[]).map((x,i)=>`<div class="row" style="margin-bottom:6px">
+     <span class="pill" style="flex:1;justify-content:space-between">${esc(x.t)} <b style="color:${DEF_STATES[x.s][1]}">${DEF_STATES[x.s][0]}</b></span>
+     <button class="iconbtn" style="flex:none" onclick="cur().defenses.custom.splice(${i},1);touch();editDefenses()">✕</button></div>`).join("")}
+   <div class="row"><input id="cdf_t" placeholder="e.g. nonmagical bludgeoning">
+     <select id="cdf_s" style="max-width:140px"><option value="resist">Resistant</option><option value="immune">Immune</option><option value="vuln">Vulnerable</option></select>
+     <button class="btn small" style="flex:none" onclick="addCustomDef()">Add</button></div>
    <hr><h3>Condition immunities</h3><div class="spacer"></div>
    <div class="cond-grid">${CONDITIONS.map(cd=>`<button class="pill ${d.condimm.includes(cd)?"on":""}" onclick="toggleCondImm('${cd}')">${cd}</button>`).join("")}</div>
-   <div class="spacer"></div><button class="btn" style="width:100%" onclick="closeModal();renderTab()">Done</button>`);}
+   ${grantedCondImm(c).length?`<p class="dim" style="margin-top:8px">✦ From items & features: ${[...new Set(grantedCondImm(c).map(x=>x.t+" ("+esc(x.src)+")"))].join(" · ")}</p>`:""}
+   <div class="spacer"></div>
+   <p class="dim">Items and features can also grant all of these automatically — add a "Resist …" or "Immune: condition" entry in their Effects section.</p>
+   <button class="btn" style="width:100%" onclick="closeModal();renderTab()">Done</button>`);}
+function addCustomDef(){const t=$("#cdf_t").value.trim();if(!t){toast("Describe the resistance first");return;}
+  cur().defenses.custom.push({t,s:$("#cdf_s").value});touch();editDefenses();}
 function cycleDef(t){const d=cur().defenses;
   const order=[undefined,"resist","immune","vuln"];
   d.dmg[t]=order[(order.indexOf(d.dmg[t])+1)%4];
@@ -1098,6 +1375,7 @@ function shortRest(){const c=cur();
   let n=0;c.features.forEach(f=>{if(!f.uses)return;const mx=maxUses(c,f);
     if(f.recharge==="short"){f.usesLeft=mx;n++;}
     else if(f.recharge==="short1"&&(f.usesLeft??mx)<mx){f.usesLeft=Math.min(mx,(f.usesLeft??mx)+1);n++;}});
+  c.spellcasting.spells.forEach(s=>{if(s.uses&&s.recharge==="short"&&(s.usesLeft??s.uses)<s.uses){s.usesLeft=+s.uses;n++;}});
   touch();renderTab();toast("🌙 Short rest — pact slots"+(n?" and "+n+" feature"+(n>1?"s":""):"")+" restored. Spend hit dice to heal.");}
 function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and half your hit dice."))return;
   const c=cur();c.hp.current=maxHP(c);c.hp.temp=0;
@@ -1106,6 +1384,7 @@ function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and 
   c.hitDice.used=Math.max(0,c.hitDice.used-Math.max(1,Math.floor(c.hitDice.total/2)));
   c.deathSaves={s:0,f:0};c.exhaustion=Math.max(0,c.exhaustion-1);
   c.features.forEach(f=>{if(f.uses)f.usesLeft=maxUses(c,f);});
+  c.spellcasting.spells.forEach(s=>{if(s.uses)s.usesLeft=+s.uses;}); /* incl. 🌅 dawn & 🌙 */
   touch();renderTab();toast("☀️ Long rest complete!");}
 function dmgPartRow(p){return `<div class="row dmgpart" style="margin-bottom:6px">
   <input class="dpD" placeholder="1d8 or 2d6+1" value="${esc(p&&p.d||"")}">
@@ -1121,9 +1400,13 @@ function editAttack(i){const c=cur();const a=i>=0?c.attacks[i]:{name:"",ability:
    <div class="spacer"></div>
    <div class="grid2">
     <div><label>Misc to-hit bonus</label><input id="atkMisc" type="number" value="${a.bonusMisc||0}"></div>
-    <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:4px">
+    <div><label>Ammunition (auto −1 per attack)</label><select id="atkAmmo">
+      <option value="">None</option>
+      ${(c.inventory.items||[]).filter(it=>it.cat==="Ammo").map(it=>`<option value="${esc(it.id||it.name)}" ${a.ammoId===(it.id||it.name)?"selected":""}>${esc(it.name)} (×${+it.qty||0})</option>`).join("")}</select></div></div>
+   <div class="spacer"></div>
+   <div class="row">
      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:0"><input type="checkbox" id="atkProf" ${a.proficient?"checked":""}> Proficient (${fmt(profBonus(c))})</label>
-     <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:0"><input type="checkbox" id="atkAddAb" ${a.addAbility?"checked":""}> Add ability mod to damage</label></div></div>
+     <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:0"><input type="checkbox" id="atkAddAb" ${a.addAbility?"checked":""}> Add ability mod to damage</label></div>
    <div class="spacer"></div>
    <label>Damage — one row per type (split damage)</label>
    <div id="dmgParts">${(a.dmgParts&&a.dmgParts.length?a.dmgParts:[{d:"",t:""}]).map(dmgPartRow).join("")}</div>
@@ -1136,7 +1419,8 @@ function saveAttack(i){const c=cur();
   const parts=$$("#dmgParts .dmgpart").map(r=>({d:r.querySelector(".dpD").value.trim(),t:r.querySelector(".dpT").value.trim()})).filter(p=>p.d);
   const a={name:$("#atkName").value.trim()||"Attack",ability:$("#atkAb").value,proficient:$("#atkProf").checked,
     kind:$("#atkKind").value,magic:+$("#atkMagic").value||0,addAbility:$("#atkAddAb").checked,
-    bonusMisc:+$("#atkMisc").value||0,dmgParts:parts,notes:$("#atkNotes").value.trim()};
+    bonusMisc:+$("#atkMisc").value||0,dmgParts:parts,notes:$("#atkNotes").value.trim(),
+    ammoId:$("#atkAmmo").value||undefined};
   if(i>=0&&c.attacks[i].itemId)a.itemId=c.attacks[i].itemId;
   i>=0?c.attacks[i]=a:c.attacks.push(a);touch();closeModal();renderTab();}
 /* ================== SKILLS TAB ================== */
@@ -1238,10 +1522,11 @@ function renderSpells(){const c=cur();const sc=c.spellcasting;const pb=profBonus
       <div class="dim" style="margin:10px 0 6px;font-weight:700">${lv===0?"CANTRIPS":"LEVEL "+lv}</div>
       ${grouped[lv].map(([s,i])=>`<div class="li" id="sp_${i}">
         <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-          ${lv>0?`<input type="checkbox" ${s.prepared?"checked":""} onclick="event.stopPropagation()" onchange="cur().spellcasting.spells[${i}].prepared=this.checked;touch()" title="Prepared">`:""}
-          <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}
-            <div class="li-sub">${esc(s.time||"")}${s.range?" · "+esc(s.range):""}</div></div>
-          ${lv>0?`<button class="btn small" onclick="event.stopPropagation();castSpell(${lv})">Cast</button>`:""}
+          ${lv>0&&!s.always&&!s.fromItem?`<input type="checkbox" ${s.prepared?"checked":""} onclick="event.stopPropagation()" onchange="cur().spellcasting.spells[${i}].prepared=this.checked;touch()" title="Prepared">`:""}
+          <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}${s.always?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">always</span>':""}${s.fromItem?`<span class="tag c">🎁 ${esc(s.fromItem)}</span>`:""}
+            <div class="li-sub">${esc(s.time||"")}${s.range?" · "+esc(s.range):""}${s.uses?` · ${s.usesLeft??s.uses}/${s.uses} uses ${s.recharge==="dawn"?"🌅":s.recharge==="short"?"🌙":"☀️"}`:""}</div></div>
+          ${s.uses?`<button class="btn small" onclick="event.stopPropagation();castItemSpell(${i})">Cast</button>`
+            :lv>0?`<button class="btn small" onclick="event.stopPropagation();castSpell(${lv})">Cast</button>`:""}
           <button class="iconbtn" onclick="event.stopPropagation();spellMenu(${i})">⋮</button></div>
         <div class="li-body">
           <div class="dim">${esc(s.school||"")} · ${esc(s.components||"")}${s.duration?" · "+esc(s.duration):""}</div>
@@ -1304,8 +1589,8 @@ function preparedInfo(c){
   const cap=spellCap(c,k.name,k.level);
   if(!cap.spells&&!cap.cantrips)return "";
   const sc=c.spellcasting;
-  const nSp=sc.spells.filter(s=>s.level>0&&(cap.mode==="known"||s.prepared)).length;
-  const nCa=sc.spells.filter(s=>s.level===0).length;
+  const nSp=sc.spells.filter(s=>s.level>0&&!s.always&&!s.fromItem&&(cap.mode==="known"||s.prepared)).length;
+  const nCa=sc.spells.filter(s=>s.level===0&&!s.fromItem).length;
   return `${cap.mode==="known"?"Known":"Prepared"}: <b>${nSp}/${cap.spells}</b> spells · <b>${nCa}/${cap.cantrips}</b> cantrips <span class="dim">(${esc(k.name)} suggestion)</span>`;}
 function maxSlotLv(c){const sc=c.spellcasting;let m=0;
   for(let l=1;l<=9;l++)if(sc.slots[l].max>0)m=l;
@@ -1407,21 +1692,42 @@ function editCustomSpell(i){const sc=cur().spellcasting;
    <div><label>Duration</label><input id="cs_dur" value="${esc(s.duration)}"></div></div><div class="spacer"></div>
    <div class="row"><label style="display:flex;align-items:center;gap:6px;text-transform:none"><input type="checkbox" id="cs_conc" ${s.conc?"checked":""}>Concentration</label>
    <label style="display:flex;align-items:center;gap:6px;text-transform:none"><input type="checkbox" id="cs_rit" ${s.ritual?"checked":""}>Ritual</label></div>
+   <hr><h3>Source & recovery</h3><div class="spacer"></div>
+   <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px"><input type="checkbox" id="cs_always" ${s.always?"checked":""}> Always prepared (domain/oath/racial spells)</label>
+   <div class="spacer"></div>
+   <div class="grid3">
+    <div><label>Granted by item</label><input id="cs_item" value="${esc(s.fromItem||"")}" placeholder="e.g. Staff of Healing"></div>
+    <div><label>Free uses (0 = slots)</label><input id="cs_uses" type="number" min="0" value="${s.uses||0}"></div>
+    <div><label>Uses recover on</label><select id="cs_rech">
+      <option value="long" ${s.recharge!=="short"&&s.recharge!=="dawn"?"selected":""}>☀️ Long rest</option>
+      <option value="short" ${s.recharge==="short"?"selected":""}>🌙 Short rest</option>
+      <option value="dawn" ${s.recharge==="dawn"?"selected":""}>🌅 Dawn</option></select></div></div>
+   <div class="dim" style="margin-top:3px">With free uses set, Cast spends a use instead of a spell slot — e.g. an item that casts a spell 1/day.</div>
    <div class="spacer"></div><label>Description</label><textarea id="cs_desc">${esc(s.desc)}</textarea>
    <div class="spacer"></div><label>At higher levels</label><input id="cs_higher" value="${esc(s.higher||"")}">
    <div class="spacer"></div><button class="btn" style="width:100%" onclick="saveCustomSpell(${i})">Save</button>`);}
 function saveCustomSpell(i){const sc=cur().spellcasting;
+  const old=i>=0?sc.spells[i]:{};
+  const uses=Math.max(0,+$("#cs_uses").value||0);
   const s={name:$("#cs_name").value.trim()||"Spell",level:+$("#cs_lv").value,school:$("#cs_school").value.trim(),
    time:$("#cs_time").value.trim(),range:$("#cs_range").value.trim(),components:$("#cs_comp").value.trim(),
    duration:$("#cs_dur").value.trim(),conc:$("#cs_conc").checked,ritual:$("#cs_rit").checked,
-   prepared:i>=0?sc.spells[i].prepared:true,desc:$("#cs_desc").value,higher:$("#cs_higher").value.trim(),source:"custom"};
+   always:$("#cs_always").checked||undefined,fromItem:$("#cs_item").value.trim()||undefined,
+   uses:uses||undefined,recharge:uses?$("#cs_rech").value:undefined,
+   prepared:i>=0?old.prepared:true,desc:$("#cs_desc").value,higher:$("#cs_higher").value.trim(),source:old.source||"custom"};
+  if(uses)s.usesLeft=Math.min(old.usesLeft??uses,uses);
   i>=0?sc.spells[i]=s:sc.spells.push(s);touch();closeModal();renderTab();}
+function castItemSpell(i){const s=cur().spellcasting.spells[i];const mx=+s.uses||0;
+  if((s.usesLeft??mx)<=0){toast("No uses left — recovers "+(s.recharge==="dawn"?"🌅 at dawn":s.recharge==="short"?"🌙 on a short rest":"☀️ on a long rest"));return;}
+  s.usesLeft=(s.usesLeft??mx)-1;touch();renderTab();
+  toast("✨ "+esc(s.name)+(s.fromItem?" ("+esc(s.fromItem)+")":"")+" — "+s.usesLeft+"/"+mx+" uses left");}
 
 /* ================== INVENTORY TAB ================== */
 function coinsToGp(cu){return cu.pp*10+cu.gp+cu.ep*0.5+cu.sp*0.1+cu.cp*0.01;}
 function renderInv(){const c=cur();const inv=c.inventory;
   const totW=inv.items.reduce((a,it)=>a+(+it.weight||0)*(+it.qty||1),0);
-  const cap=c.abilities.str*15;
+  const pb2=c.features.some(f=>/powerful build/i.test(f.name||""))?2:1;
+  const cap=abl(c,"str")*15*pb2;
   const attuned=inv.items.filter(i=>i.attuned).length;
   $("#scr-inv").innerHTML=`
   <div class="card">
@@ -1440,7 +1746,7 @@ function renderInv(){const c=cur();const inv=c.inventory;
   </div>`;}
 function itemRow(it,i){const c=cur();
   const sub=[it.cat||"",it.cat==="Armor"&&it.armor?"AC "+it.armor.base+(it.armor.dexCap===0?"":it.armor.dexCap?" +Dex(max "+it.armor.dexCap+")":" +Dex"):"",
-    it.cat==="Weapon"&&it.weapon?esc(it.weapon.dmg||"")+" "+esc(it.weapon.type||""):"",
+    it.cat==="Weapon"&&it.weapon?(it.weapon.parts&&it.weapon.parts.length?it.weapon.parts.map(p=>esc(p.d)+(p.t?" "+esc(p.t):"")).join(" + "):esc(it.weapon.dmg||"")+" "+esc(it.weapon.type||"")):"",
     it.magic?"+"+it.magic:"",it.weight?it.weight+" lb":"",it.cost?esc(it.cost):""].filter(Boolean).join(" · ");
   const fx=(it.effects||[]).length?` <span style="color:var(--gold)" title="grants bonuses">✦</span>`:"";
   return `<div class="li" data-nm="${esc(it.name.toLowerCase())}">
@@ -1453,7 +1759,7 @@ function itemRow(it,i){const c=cur();
     <button class="iconbtn" onclick="event.stopPropagation();qtyDelta(${i},1)">＋</button>
     <button class="iconbtn" onclick="event.stopPropagation();editItem(${i})">✏️</button></div>
   <div class="li-body">${it.desc?`<p>${esc(it.desc).replace(/\n+/g,"</p><p>")}</p>`:""}
-    ${(it.effects||[]).length?`<p class="dim">Bonuses: ${it.effects.map(e=>esc(EFFECT_LABELS[e.t]||e.t)+" "+esc(String(e.v))).join(", ")}${it.needsAttune?" (needs attunement)":""} — active while equipped.</p>`:""}
+    ${(it.effects||[]).length?`<p class="dim">Bonuses: ${it.effects.map(fxLabel).join(", ")}${it.needsAttune?" (needs attunement)":""} — active while equipped.</p>`:""}
     <div class="row"><button class="pill ${it.equipped?"on":""}" onclick="toggleEquip(${i})">Equipped</button>
     <button class="pill ${it.attuned?"on":""}" onclick="cur().inventory.items[${i}].attuned=!${!!it.attuned};touch();renderTab()">Attuned</button></div>
     ${it.notes?`<p class="dim">${esc(it.notes)}</p>`:""}</div></div>`;}
@@ -1473,9 +1779,14 @@ function createAttackFromItem(c,it){const w=it.weapon||{};
   let ability="str";
   if(w.kind==="ranged")ability="dex";
   else if(w.finesse&&amod(c,"dex")>amod(c,"str"))ability="dex";
-  c.attacks.push({name:it.name,ability,proficient:true,kind:w.kind||"melee",magic:+it.magic||0,addAbility:true,
-    bonusMisc:0,dmgParts:[{d:w.dmg||"1d6",t:w.type||""}],notes:"",itemId:it.id||it.name});
-  toast("⚔️ Attack added — Main tab");}
+  const atk={name:it.name,ability,proficient:true,kind:w.kind||"melee",magic:+it.magic||0,addAbility:true,
+    bonusMisc:0,dmgParts:(w.parts&&w.parts.length?w.parts:[{d:w.dmg||"1d6",t:w.type||""}]).map(p=>({...p})),notes:"",itemId:it.id||it.name};
+  if(w.kind==="ranged"){ /* auto-link matching ammunition */
+    const key=/crossbow/i.test(it.name)?"bolt":/\bbow\b|longbow|shortbow/i.test(it.name)?"arrow":/sling/i.test(it.name)?"bullet":/blowgun/i.test(it.name)?"needle":null;
+    if(key){const am=(c.inventory.items||[]).find(x=>x.cat==="Ammo"&&new RegExp(key,"i").test(x.name));
+      if(am)atk.ammoId=am.id||am.name;}}
+  c.attacks.push(atk);
+  toast("⚔️ Attack added — Main tab"+(atk.ammoId?" (🏹 linked)":""));}
 function filterItems(q){q=q.toLowerCase();$$("#itemList .li").forEach(el=>el.style.display=el.dataset.nm.includes(q)?"":"none");}
 function qtyDelta(i,d){const it=cur().inventory.items[i];it.qty=Math.max(0,(+it.qty||1)+d);
   if(it.qty===0&&confirm("Remove "+it.name+"?")){cur().inventory.items.splice(i,1);}else if(it.qty===0)it.qty=1;
@@ -1503,11 +1814,13 @@ function editItem(i){const inv=cur().inventory;
      <div><label>Str required</label><input id="it_acStr" type="number" value="${ar.strReq||0}"></div></div>
     <div class="spacer"></div></div>
    <div id="it_weaponBox" style="display:${it.cat==="Weapon"?"":"none"}">
-    <div class="grid3">
-     <div><label>Damage dice</label><input id="it_wDmg" value="${esc(w.dmg||"")}" placeholder="1d8"></div>
-     <div><label>Damage type</label><input id="it_wType" value="${esc(w.type||"")}" placeholder="slashing"></div>
-     <div><label>Kind</label><select id="it_wKind"><option value="melee" ${w.kind!=="ranged"?"selected":""}>Melee</option><option value="ranged" ${w.kind==="ranged"?"selected":""}>Ranged</option></select></div></div>
-    <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin-top:6px"><input type="checkbox" id="it_wFin" ${w.finesse?"checked":""}> Finesse (uses better of Str/Dex)</label>
+    <label>Damage — one row per type (split damage)</label>
+    <div id="it_wParts">${((w.parts&&w.parts.length?w.parts:[{d:w.dmg||"",t:w.type||""}])).map(dmgPartRow).join("")}</div>
+    <button class="btn ghost small" onclick="$('#it_wParts').insertAdjacentHTML('beforeend',dmgPartRow())">＋ Add damage type</button>
+    <div class="spacer"></div>
+    <div class="row">
+     <div><label>Kind</label><select id="it_wKind"><option value="melee" ${w.kind!=="ranged"?"selected":""}>Melee</option><option value="ranged" ${w.kind==="ranged"?"selected":""}>Ranged</option></select></div>
+     <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:18px 0 0"><input type="checkbox" id="it_wFin" ${w.finesse?"checked":""}> Finesse (best of Str/Dex)</label></div>
     <div class="spacer"></div></div>
    <div class="grid2"><div><label>Weight (lb)</label><input id="it_w" type="number" step="0.1" value="${it.weight}"></div>
    <div><label>Cost</label><input id="it_cost" value="${esc(it.cost||"")}"></div></div>
@@ -1530,11 +1843,15 @@ function saveItem(i){const inv=cur().inventory;
    effects:fxCollect(),desc:$("#it_desc").value,notes:$("#it_notes").value.trim()};
   if(cat==="Armor"){const dx=$("#it_acDex").value;
     it.armor={base:+$("#it_acBase").value||10,dexCap:dx==="full"?null:+dx,strReq:+$("#it_acStr").value||0};}
-  if(cat==="Weapon")it.weapon={dmg:$("#it_wDmg").value.trim(),type:$("#it_wType").value.trim(),kind:$("#it_wKind").value,finesse:$("#it_wFin").checked};
+  if(cat==="Weapon"){
+    const parts=$$("#it_wParts .dmgpart").map(r=>({d:r.querySelector(".dpD").value.trim(),t:r.querySelector(".dpT").value.trim()})).filter(p=>p.d);
+    it.weapon={parts:parts.length?parts:[{d:"1d6",t:""}],dmg:(parts[0]||{}).d||"1d6",type:(parts[0]||{}).t||"",
+      kind:$("#it_wKind").value,finesse:$("#it_wFin").checked};}
   i>=0?inv.items[i]=it:inv.items.push(it);
   /* keep linked attack in sync */
   const atk=cur().attacks.find(a=>a.itemId===(it.id||it.name));
-  if(atk&&it.weapon){atk.magic=it.magic;atk.kind=it.weapon.kind;if(it.weapon.dmg)atk.dmgParts[0]={d:it.weapon.dmg,t:it.weapon.type};}
+  if(atk&&it.weapon){atk.magic=it.magic;atk.kind=it.weapon.kind;
+    atk.dmgParts=it.weapon.parts.map(p=>({...p}));}
   touch();closeModal();renderTab();}
 /* ================== FEATURES TAB ================== */
 const KIND_TAG={action:"⚡ action",bonus:"⚡ bonus action",reaction:"⚡ reaction",active:"⚡ active"};
@@ -1542,13 +1859,13 @@ function featLi(c,f,i){const mx=maxUses(c,f);const kind=featKind(f);
   const fx=(f.effects||[]).length?` <span style="color:var(--gold)" title="grants automatic bonuses">✦</span>`:"";
   return `<div class="li">
    <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-    <div class="li-title">${esc(f.name)}${fx} ${f.source==="feat"?'<span class="tag" style="color:var(--accent2);border-color:var(--accent2)">feat</span>':""}${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${kind!=="passive"?`<span class="tag">${KIND_TAG[kind]||kind}</span>`:""}${f.slotCast?'<span class="tag c">uses spell slot</span>':""}${f.ph&&f.desc===PH_TEXT?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">paste text</span>':""}
+    <div class="li-title">${esc(f.name)}${fx} ${f.source==="feat"?'<span class="tag" style="color:var(--accent2);border-color:var(--accent2)">feat</span>':""}${f.source==="race"?'<span class="tag" style="color:var(--blue);border-color:var(--blue)">race</span>':""}${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${kind!=="passive"?`<span class="tag">${KIND_TAG[kind]||kind}</span>`:""}${f.slotCast?'<span class="tag c">uses spell slot</span>':""}${f.ph&&f.desc===PH_TEXT?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">paste text</span>':""}
      ${mx>0?`<div class="li-sub">${f.usesLeft??mx}/${mx} uses · ${f.recharge==="short"?"🌙 short rest":f.recharge==="short1"?"🌙 +1 per short rest":"☀️ long rest"}</div>`:""}</div>
     ${mx>0?`<button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>
     <button class="iconbtn" title="Undo use" onclick="event.stopPropagation();undoFeature(${i})">↩</button>`:""}
     <button class="iconbtn" onclick="event.stopPropagation();editFeature(${i})">✏️</button></div>
    <div class="li-body">
-    ${(f.effects||[]).length?`<p class="dim">Bonuses: ${f.effects.map(e=>esc(EFFECT_LABELS[e.t]||e.t)+" "+esc(String(e.v))).join(", ")} — applied automatically.</p>`:""}
+    ${(f.effects||[]).length?`<p class="dim">Bonuses: ${f.effects.map(fxLabel).join(", ")} — applied automatically.</p>`:""}
     <p>${esc(f.desc||"").replace(/\n+/g,"</p><p>")}</p></div></div>`;}
 function renderFeat(){const c=cur();
   const act=[],pas=[];
