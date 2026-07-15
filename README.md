@@ -29,6 +29,22 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Level-up spell choice**: when a level grants new spells/cantrips or unlocks a new slot level, a picker opens with your class's spell list and the suggested number to learn/prepare.
 - **Resistances & Immunities**: a collapsible Main-tab section (tap to expand, badge shows the count) tracks damage resistances / immunities / vulnerabilities (tap to cycle), condition immunities, and free-text "flavour" entries (e.g. "nonmagical bludgeoning"). Items and features can grant all of them — including condition immunities — via their Effects (shown with ✦, active while equipped/attuned).
 - 🎆 Rolls that total exactly **14** get fireworks. You know why.
+
+### New in v1.2
+
+- **🧠 Concentration tracker**: casting a concentration spell (or toggling a concentration buff) sets it; taking damage prompts the CON save with the right DC; tap the badge to drop it. Cleared on long rest.
+- **🔆 Active effects quick-bar** (Main): one-tap toggles for Rage, Shield, Shield of Faith, Bless/Bane/Guidance (their d4 is rolled into your d20 results automatically), Haste, Enlarge/Reduce — plus fully custom buffs with numeric effects, d20 dice and damage dice.
+- **Condition reference**: ⓘ next to Conditions shows what each condition (and exhaustion) actually does.
+- **Backgrounds**: pick from the 2014 list — skills and the background feature apply automatically; 2024 characters are prompted for the +2/+1 and origin feat.
+- **Point buy & standard array** modes in the ability score editor (with live 27-point budget).
+- **🗺️ Level-up planner**: plan ASIs/feats per class level in advance; leveling past a planned point applies it automatically.
+- **🖨️ Print / PDF**: generates a clean printable sheet (browser print → save as PDF).
+- **Homebrew builders**: create custom races and feats once (⚙️ → Homebrew), use them on every character; custom feats appear in the feat picker.
+- **Roll history** in the dice roller (last rolls with timestamps).
+- **📖 Journal**: dated entries on the Features tab for sessions, quests and NPCs.
+- **🐾 Companions & forms** (Main): pets, familiars, wild-shape forms and summons with their own AC/HP trackers and attack rolls.
+- **⚔️ Weapon Mastery (2024)**: tag weapons/attacks with Cleave, Graze, Nick, Push, Sap, Slow, Topple or Vex — shown on the attack card, rule text in the breakdown popup.
+- **Artificer multiclass rounding**: rounds up per RAW in multiclass caster-level math (toggle in slot configuration).
 - **Custom defenses from items/features**: Effects also offer "Custom resistance/immunity/vulnerability…" — type the text as the value (e.g. "nonmagical slashing"), shown in italics with ✦ while the item is equipped.
 - **Race selection with automation**: pick a race in the wizard or character editor (2014 SRD list with subraces, plus Frost Giant). Ability increases are applied as automatic effects (cleanly removed if you change race), speed and size are set, and traits — Darkvision, poison/cold/fire resistance, Breath Weapon with uses, skill proficiencies, Powerful Build (doubles carry capacity) — are added as tagged features. Choices (draconic ancestry, Half-Elf +1s and skills) are prompted. In 2024 the ability increases are skipped (they come from backgrounds).
 - **Details & flavour**: collapsible card at the bottom of Main with size, height, weight, age, eyes/hair/skin and a free-text flavour box.

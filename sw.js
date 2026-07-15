@@ -1,7 +1,7 @@
 /* Grimoire service worker.
    HOW UPDATES WORK: bump CACHE_VERSION whenever you change any file,
    then reload the app twice (or close & reopen). */
-const CACHE_VERSION = "grimoire-v14";
+const CACHE_VERSION = "grimoire-v17";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
