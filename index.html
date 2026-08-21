@@ -44,17 +44,27 @@ h1{font-size:22px;margin:0} h2{font-size:17px;margin:0 0 10px} h3{font-size:15px
 .spacer{height:8px}
 hr{border:none;border-top:1px solid var(--line);margin:12px 0}
 
-/* Top bar */
-#topbar{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,var(--bg2),rgba(30,24,48,.96));backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:10px 14px calc(10px);display:flex;align-items:center;gap:10px}
+/* Top bar — #hdr is the sticky element so the status strip rides with it */
+#hdr{position:sticky;top:0;z-index:50}
+#topbar{background:linear-gradient(180deg,var(--bg2),rgba(30,24,48,.96));backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:10px 14px calc(10px);display:flex;align-items:center;gap:10px}
 #topbar .title{flex:1;min-width:0}
 #topbar .title .nm{font-weight:700;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #topbar .title .sub{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .iconbtn{width:38px;height:38px;border-radius:10px;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:17px;flex:none}
 
 /* Bottom nav */
-#nav{position:fixed;bottom:0;left:0;right:0;z-index:50;height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg2);border-top:1px solid var(--line);display:none;grid-template-columns:repeat(5,1fr)}
-#nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10.5px;color:var(--dim);letter-spacing:.02em}
-#nav button .ic{font-size:20px;line-height:1}
+#nav{position:fixed;bottom:0;left:0;right:0;z-index:50;height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--bg2);border-top:1px solid var(--line);display:none;grid-template-columns:repeat(6,1fr)}
+#nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9.5px;color:var(--dim);letter-spacing:0;padding:0 1px}
+#nav button .ic{font-size:19px;line-height:1}
+@media(min-width:420px){#nav button{font-size:10.5px}#nav button .ic{font-size:20px}}
+
+/* Always-visible status strip: conditions, exhaustion, concentration */
+#statusbar{display:none;background:var(--bg2);border-bottom:1px solid var(--line);padding:6px 10px;gap:6px;flex-wrap:wrap;align-items:center}
+#statusbar.on{display:flex}
+#statusbar .sb{display:inline-flex;align-items:center;gap:4px;border-radius:99px;padding:3px 10px;font-size:12px;border:1px solid var(--line);background:var(--card2);cursor:pointer;white-space:nowrap}
+#statusbar .sb.cond{border-color:var(--red);color:var(--red)}
+#statusbar .sb.exh{border-color:var(--gold);color:var(--gold)}
+#statusbar .sb.conc{border-color:var(--accent2);color:var(--accent2)}
 #nav button.on{color:var(--accent2)}
 
 /* Ability blocks */
@@ -95,8 +105,8 @@ hr{border:none;border-top:1px solid var(--line);margin:12px 0}
 
 /* list items */
 .li{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
-.li .li-head{display:flex;align-items:center;gap:8px;cursor:pointer}
-.li .li-title{flex:1;font-weight:600;min-width:0}
+.li .li-head{display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:wrap}
+.li .li-title{flex:1 1 55%;font-weight:600;min-width:0}
 .li .li-sub{font-size:12px;color:var(--dim)}
 .li .li-body{display:none;margin-top:10px;font-size:14px;color:var(--txt)}
 .li.open .li-body{display:block}
@@ -150,11 +160,14 @@ textarea{min-height:80px;resize:vertical}
 </head>
 <body>
 
-<div id="topbar" style="display:none">
-  <button class="iconbtn" id="btnBack" title="Characters">👥</button>
-  <div class="title"><div class="nm" id="tbName"></div><div class="sub" id="tbSub"></div></div>
-  <button class="iconbtn" id="btnDice" title="Dice roller">🎲</button>
-  <button class="iconbtn" id="btnMenu" title="Menu">⋮</button>
+<div id="hdr">
+  <div id="topbar" style="display:none">
+    <button class="iconbtn" id="btnBack" title="Characters">👥</button>
+    <div class="title"><div class="nm" id="tbName"></div><div class="sub" id="tbSub"></div></div>
+    <button class="iconbtn" id="btnDice" title="Dice roller">🎲</button>
+    <button class="iconbtn" id="btnMenu" title="Menu">⋮</button>
+  </div>
+  <div id="statusbar"></div>
 </div>
 
 <!-- ============ CHARACTER LIST ============ -->
@@ -177,6 +190,8 @@ textarea{min-height:80px;resize:vertical}
 <div class="screen" id="scr-skills"></div>
 <!-- ============ SPELLS TAB ============ -->
 <div class="screen" id="scr-spells"></div>
+<!-- ============ COMPANIONS TAB ============ -->
+<div class="screen" id="scr-comp"></div>
 <!-- ============ INVENTORY TAB ============ -->
 <div class="screen" id="scr-inv"></div>
 <!-- ============ FEATURES TAB ============ -->
@@ -186,6 +201,7 @@ textarea{min-height:80px;resize:vertical}
   <button data-tab="main"><span class="ic">🛡️</span>Main</button>
   <button data-tab="skills"><span class="ic">🎯</span>Skills</button>
   <button data-tab="spells"><span class="ic">✨</span>Spells</button>
+  <button data-tab="comp"><span class="ic">🐾</span>Allies</button>
   <button data-tab="inv"><span class="ic">🎒</span>Items</button>
   <button data-tab="feat"><span class="ic">📜</span>Features</button>
 </nav>
@@ -726,7 +742,6 @@ let db={characters:[],currentId:null};
 let curTab="main";
 let defsOpen=false; /* Resistances & Immunities toggle on Main */
 let detOpen=false; /* Details & flavour toggle on Main */
-let compOpen=false; /* Companions toggle on Main */
 let _saveFailed=false;
 function save(){
   try{localStorage.setItem(STORE_KEY,JSON.stringify(db));_saveFailed=false;}
@@ -810,12 +825,25 @@ function migrate(c){ /* upgrade older saves in place — must survive partial, o
   if(c.concentration===undefined)c.concentration=null;
   c.journal=_arr(c.journal,[]);
   c.companions=_arr(c.companions,[]).filter(p=>p&&p.name);
+  c.companions.forEach(p=>{
+    p.id=p.id||uid();
+    if(!COMP_KINDS[p.kind])p.kind="companion"; /* pre-v1.4 entries were all untyped companions */
+    p.conc=!!p.conc;
+    if(p.active===undefined)p.active=true;
+    p.hpMax=Math.max(1,+p.hpMax||1);
+    p.hpCur=Math.max(0,Math.min(p.hpMax,Number.isFinite(+p.hpCur)?+p.hpCur:p.hpMax));
+    p.attacks=_arr(p.attacks,[]).filter(a=>a&&a.name);});
   c.plan=_obj(c.plan,{});
   c.encVariant=!!c.encVariant;
   c.color=c.color||AVATAR_COLORS[0];
   c.updated=+c.updated||Date.now();
   /* per-entry upgrades */
   c.features.forEach(f=>{
+    f.fav=!!f.fav;
+    if(f.grants){
+      f.grants.spells=_arr(f.grants.spells,[]).filter(x=>typeof x==="string"&&x.trim());
+      f.grants.summons=_arr(f.grants.summons,[]).filter(x=>x&&x.name);
+      if(!f.grants.spells.length&&!f.grants.summons.length)delete f.grants;}
     if(f.uses&&!f.recharge)f.recharge="long";
     if(!f.effects)f.effects=autoEffects(f.name,f.desc);
     if(f.slotCast===undefined&&detectSlotCast(f.desc))f.slotCast=true;});
@@ -1001,11 +1029,15 @@ function endConcentration(reason){ /* silent version — RAW end, not a player c
   const c=cur();if(!c||!c.concentration)return;
   const was=c.concentration;
   if(buffOn(c,was))c.activeBuffs=c.activeBuffs.filter(x=>x!==was);
-  c.concentration=null;touch();
-  toast("🧠 Concentration on "+esc(was)+" ended"+(reason?" — "+esc(reason):""));}
+  c.concentration=null;
+  const n=dismissConcSummons(c);
+  touch();
+  toast("🧠 Concentration on "+esc(was)+" ended"+(reason?" — "+esc(reason):"")+(n?" · "+n+" summon"+(n>1?"s":"")+" dismissed":""));}
 function dropConcentration(){const c=cur();
   if(c.concentration&&buffOn(c,c.concentration))c.activeBuffs=c.activeBuffs.filter(x=>x!==c.concentration);
-  c.concentration=null;touch();renderTab();toast("🧠 Concentration dropped");}
+  c.concentration=null;
+  const n=dismissConcSummons(c);
+  touch();renderTab();toast("🧠 Concentration dropped"+(n?" — "+n+" summon"+(n>1?"s":"")+" dismissed":""));}
 function concCheckModal(dmg){const c=cur();
   const dc=Math.max(10,Math.floor(dmg/2));
   openModal(`<h2>🧠 Concentration check ${XBTN}</h2>
@@ -1203,7 +1235,7 @@ function fxCollect(){return $$("#fxList .fxrow").map(r=>{
 
 /* ================== NAVIGATION ================== */
 function showList(){db.currentId=null;save();
-  $("#topbar").style.display="none";$("#nav").style.display="none";
+  $("#topbar").style.display="none";$("#nav").style.display="none";$("#statusbar").className="";
   $$(".screen").forEach(s=>s.classList.remove("active"));$("#scr-list").classList.add("active");
   renderList();}
 function openChar(id){db.currentId=id;save();
@@ -1218,7 +1250,8 @@ function renderTab(){const c=cur();if(!c){showList();return;}
   try{
     $("#tbName").textContent=c.name;
     $("#tbSub").textContent=classStr(c)+" · Lv "+totalLevel(c)+" · PB "+fmt(profBonus(c));
-    const fn=({main:renderMain,skills:renderSkills,spells:renderSpells,inv:renderInv,feat:renderFeat})[curTab];
+    renderStatusBar();
+    const fn=({main:renderMain,skills:renderSkills,spells:renderSpells,comp:renderComp,inv:renderInv,feat:renderFeat})[curTab];
     if(!fn){curTab="main";renderMain();return;}
     fn();
   }catch(err){ /* one bad field must not leave a blank tab with no way back */
@@ -1232,7 +1265,31 @@ function renderTab(){const c=cur();if(!c){showList();return;}
 $$("#nav button").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 $("#btnBack").onclick=showList;
 
+/* ================== ALWAYS-VISIBLE STATUS STRIP ==================
+   Conditions, exhaustion and concentration are the three kinds of state that silently change
+   how you roll, so they follow you onto every tab instead of living only on Main.
+   Hidden entirely when there is nothing to show. */
+function renderStatusBar(){
+  const el=$("#statusbar");if(!el)return;
+  const c=cur();
+  if(!c){el.className="";el.innerHTML="";return;}
+  const bits=[];
+  (c.conditions||[]).forEach(cd=>bits.push(
+    `<span class="sb cond" onclick="conditionsInfo()" title="${esc(CONDITION_TEXT[cd]||"")} — tap for the full rules">${esc(cd)}</span>`));
+  if(c.exhaustion>0)bits.push(
+    `<span class="sb exh" onclick="conditionsInfo()" title="${c.edition==="2024"?`${fmt(-2*c.exhaustion)} to every d20 test, ${fmt(-5*c.exhaustion)} ft speed`:"2014: a ladder of conditions — you are warned when you roll"}">😵 Exhaustion ${c.exhaustion}</span>`);
+  if(c.concentration)bits.push(
+    `<span class="sb conc" onclick="dropConcentration()" title="tap to drop concentration">🧠 ${esc(c.concentration)} ✕</span>`);
+  el.className=bits.length?"on":"";
+  el.innerHTML=bits.join("");}
+
 /* ================== MODAL ================== */
+/* Re-rendering a tab rebuilds its cards, which would slam shut whatever the player had
+   expanded — including the buttons they were about to press. Remember what was open and
+   put it back. Any .li carrying data-k takes part. */
+function openKeys(){return new Set($$(".li.open[data-k]").map(el=>el.dataset.k));}
+function restoreOpen(keys){if(!keys||!keys.size)return;
+  $$(".li[data-k]").forEach(el=>{if(keys.has(el.dataset.k))el.classList.add("open");});}
 function openModal(html){$("#modalBox").innerHTML=html;$("#modalBg").classList.add("open");}
 function closeModal(){$("#modalBg").classList.remove("open");}
 $("#modalBg").onclick=e=>{if(e.target.id==="modalBg")closeModal();};
@@ -1637,6 +1694,7 @@ function saveIdentity(){const c=cur();
 function renderMain(){const c=cur();const pb=profBonus(c);
   const nextXp=totalLevel(c)<20?XP_THRESHOLDS[totalLevel(c)]:null;
   const mhp=maxHP(c);
+  const hpPend=hpPending.t==="c"?hpPending.d:0;
   const hpPct=Math.max(0,Math.min(100,100*c.hp.current/Math.max(1,mhp)));
   $("#scr-main").innerHTML=`
   <div class="card">
@@ -1669,13 +1727,17 @@ function renderMain(){const c=cur();const pb=profBonus(c);
     <div class="section-head"><h2 style="margin:0">Hit Points</h2>
       <button class="pill" onclick="explainHP()">Edit ⓘ</button></div>
     <div class="hp-wrap">
-      <button class="stepbtn" onclick="hpDelta(-1)">−</button>
+      <button class="stepbtn" onclick="tallyHp('c',-1)">−</button>
       <div style="flex:1">
         <div class="hp-num">${c.hp.current}<span class="mx"> / ${mhp}</span>${c.hp.temp?` <span style="font-size:15px;color:var(--blue)">+${c.hp.temp}</span>`:""}</div>
         <div class="hpbar"><div style="width:${hpPct}%;background:${hpPct>50?"var(--green)":hpPct>25?"var(--gold)":"var(--red)"}"></div></div>
       </div>
-      <button class="stepbtn" onclick="hpDelta(1)">＋</button>
+      <button class="stepbtn" onclick="tallyHp('c',1)">＋</button>
     </div>
+    ${hpPend?`<div class="row" style="margin-top:8px;align-items:center">
+      <div style="flex:1;text-align:center;font-weight:800;font-size:18px;color:${hpPend<0?"var(--red)":"var(--green)"}">${fmt(hpPend)} <span class="dim" style="font-weight:400">→ ${previewHp(c,hpPend)} HP</span></div>
+      <button class="btn small" style="flex:none" onclick="commitHp()">Apply</button>
+      <button class="btn ghost small" style="flex:none" onclick="cancelHp()">Cancel</button></div>`:""}
     <div class="row" style="margin-top:10px">
       <button class="btn ghost small" onclick="hpPrompt(-1)">Damage…</button>
       <button class="btn ghost small" onclick="hpPrompt(1)">Heal…</button>
@@ -1753,42 +1815,121 @@ function renderMain(){const c=cur();const pb=profBonus(c);
     <textarea onchange="cur().details.flavor=this.value;touch()">${esc(c.details.flavor)}</textarea>`:""}
   </div>
 
-  <div class="card">
-    <div class="section-head" onclick="compOpen=!compOpen;renderTab()" style="cursor:pointer;margin-bottom:${compOpen?"10px":"0"}">
-      <h2 style="margin:0">${compOpen?"▾":"▸"} 🐾 Companions & forms ${(c.companions||[]).length?`<span class="tag">${c.companions.length}</span>`:""}</h2>
-      ${compOpen?`<button class="pill" onclick="event.stopPropagation();compEditor(-1)">＋ Add</button>`:""}
-    </div>
-    ${compOpen?((c.companions||[]).length?c.companions.map((p,i)=>`<div class="li open">
-      <div class="li-head"><div class="li-title">${esc(p.name)}<div class="li-sub">AC ${p.ac} · Speed ${p.speed||30}${p.notes?" · "+esc(p.notes):""}</div></div>
-        <button class="iconbtn" onclick="compEditor(${i})">✏️</button></div>
-      <div class="li-body">
-        <div class="row" style="align-items:center">
-          <button class="stepbtn" onclick="compHp(${i},-1)">−</button>
-          <div class="hp-num" style="min-width:90px;font-size:22px">${p.hpCur}<span class="mx"> / ${p.hpMax}</span></div>
-          <button class="stepbtn" onclick="compHp(${i},1)">＋</button>
-        </div>
-        ${(p.attacks||[]).map((a,j)=>`<div class="row" style="margin-top:6px">
-          <span style="flex:1">${esc(a.name)}</span>
-          <button class="btn ghost small" onclick="d20Roll('${jstr(p.name)}: ${jstr(a.name)}',${+a.hit||0})">${fmt(+a.hit||0)}</button>
-          ${a.dmg?`<button class="btn ghost small" onclick="damageRoll('${jstr(a.name)} damage','${jstr(a.dmg)}')">DMG</button>`:""}</div>`).join("")}
-      </div></div>`).join(""):'<div class="empty">Pets, familiars, wild shape forms, summons…</div>'):""}
-  </div>
   ${nextXp!==null?`<p class="dim center">XP ${c.xp||0} / ${nextXp} for level ${totalLevel(c)+1}</p>`:""}`;}
-function compHp(i,d){const p=cur().companions[i];
-  p.hpCur=Math.max(0,Math.min(+p.hpMax||0,(+p.hpCur||0)+d));touch();renderTab();}
+/* ================== COMPANIONS / FAMILIARS / SUMMONS / FORMS ================== */
+const COMP_KINDS={
+ companion:{ic:"🐺",label:"Companions",one:"Companion",hint:"beast companions, mounts, hirelings"},
+ familiar:{ic:"🦉",label:"Familiars",one:"Familiar",hint:"Find Familiar, Pact of the Chain"},
+ summon:{ic:"✨",label:"Summons",one:"Summon",hint:"conjured creatures — usually concentration"},
+ form:{ic:"🐻",label:"Forms",one:"Form",hint:"Wild Shape, Polymorph, alternate shapes"}};
+const COMP_ORDER=["companion","familiar","summon","form"];
+function compKind(p){return COMP_KINDS[p.kind]?p.kind:"companion";}
+function compActive(p){return p.active!==false;}
+function renderComp(){const c=cur();
+  const list=(c.companions||[]).map((p,i)=>[p,i]);
+  const live=list.filter(([p])=>compActive(p)).length;
+  const concSummons=list.filter(([p])=>p.conc&&compActive(p)).length;
+  const groups=COMP_ORDER.map(k=>[k,list.filter(([p])=>compKind(p)===k)]).filter(([,g])=>g.length);
+  $("#scr-comp").innerHTML=`
+  <div class="card">
+    <div class="section-head"><h2 style="margin:0">🐾 Allies & forms</h2>
+      <button class="pill" onclick="compEditor(-1)">＋ Add</button></div>
+    <div class="dim">${list.length?`${live} active of ${list.length}`:"Nothing summoned yet"}${c.concentration?` · 🧠 concentrating on <b>${esc(c.concentration)}</b>`:""}</div>
+    ${concSummons?`<div class="spacer"></div><button class="btn ghost small" style="width:100%" onclick="dropConcentration()">🧠 Drop concentration — dismisses ${concSummons} summon${concSummons>1?"s":""}</button>`:""}
+  </div>
+  ${groups.length?groups.map(([k,g])=>`
+   <div class="card">
+    <h2 style="margin:0">${COMP_KINDS[k].ic} ${COMP_KINDS[k].label}</h2>
+    <div class="dim" style="margin:2px 0 10px">${COMP_KINDS[k].hint}</div>
+    ${g.map(([p,i])=>compCard(c,p,i)).join("")}
+   </div>`).join("")
+  :`<div class="card"><div class="empty">Beast companions, familiars, conjured creatures and Wild Shape forms live here — each with its own HP, AC and attack rolls.<div class="spacer"></div>
+     ${COMP_ORDER.map(k=>`<div style="margin:4px 0">${COMP_KINDS[k].ic} <b>${COMP_KINDS[k].one}</b> — ${COMP_KINDS[k].hint}</div>`).join("")}</div>
+     <button class="btn" style="width:100%" onclick="compEditor(-1)">＋ Add your first</button></div>`}
+  <p class="dim center">A feature can carry a statblock and summon it here in one tap — see 📜 Features.</p>`;}
+function compCard(c,p,i){
+  const on=compActive(p);
+  const mx=Math.max(1,+p.hpMax||1),cu=Math.max(0,+p.hpCur||0);
+  const pct=Math.max(0,Math.min(100,100*cu/mx));
+  const pend=hpPending.t===p.id?hpPending.d:0;
+  return `<div class="li open" style="${on?"":"opacity:.55"}">
+   <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">
+     <div style="flex:1 1 55%;min-width:0">
+       <div style="font-weight:600">${esc(p.name)}</div>
+       <div style="margin:3px 0;display:flex;gap:4px;flex-wrap:wrap">
+         <span class="tag">${COMP_KINDS[compKind(p)].ic} ${COMP_KINDS[compKind(p)].one}</span>
+         ${p.conc?`<span class="tag c" title="requires concentration">🧠 conc.</span>`:""}
+         ${p.src?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="granted by a feature">📜 ${esc(p.src)}</span>`:""}
+         ${on?"":'<span class="tag">dismissed</span>'}</div>
+       <div class="li-sub">AC ${+p.ac||10} · Speed ${+p.speed||30} ft${p.init?` · Init ${fmt(+p.init)}`:""}</div>
+       ${p.notes?`<div class="li-sub">${esc(p.notes)}</div>`:""}</div>
+     <div style="display:flex;gap:6px;flex:none;margin-left:auto">
+       <button class="pill ${on?"on":""}" onclick="toggleCompActive(${i})">${on?"Active":"Summon"}</button>
+       <button class="iconbtn" onclick="compEditor(${i})">✏️</button></div></div>
+   <div class="li-body">
+    <div class="row" style="align-items:center">
+      <button class="stepbtn" onclick="tallyHp('${jstr(p.id)}',-1)">−</button>
+      <div style="flex:1;text-align:center">
+        <div class="hp-num" style="font-size:22px">${cu}<span class="mx"> / ${mx}</span>${pend?`<span style="font-size:15px;color:${pend<0?"var(--red)":"var(--green)"}"> ${fmt(pend)}</span>`:""}</div>
+        <div class="hpbar"><div style="width:${pct}%;background:${pct>50?"var(--green)":pct>25?"var(--gold)":"var(--red)"}"></div></div>
+      </div>
+      <button class="stepbtn" onclick="tallyHp('${jstr(p.id)}',1)">＋</button>
+    </div>
+    ${pend?`<div class="row" style="margin-top:6px"><button class="btn small" onclick="commitHp()">Apply ${fmt(pend)}</button>
+      <button class="btn ghost small" onclick="cancelHp()">Cancel</button></div>`:""}
+    ${p.init!==undefined&&p.init!==""?`<div class="row" style="margin-top:6px"><button class="btn ghost small" onclick="d20Roll('${jstr(p.name)} initiative',${+p.init||0},'',{kind:'check',ab:'dex'})">🎲 Initiative ${fmt(+p.init||0)}</button></div>`:""}
+    ${(p.attacks||[]).map(a=>`<div class="row" style="margin-top:6px">
+      <span style="flex:1">${esc(a.name)}${a.dmg?` <span class="dim">${esc(a.dmg)}</span>`:""}</span>
+      <button class="btn ghost small" style="flex:none" onclick="d20Roll('${jstr(p.name)}: ${jstr(a.name)}',${+a.hit||0},'',{kind:'attack'})">${fmt(+a.hit||0)}</button>
+      ${a.dmg?`<button class="btn ghost small" style="flex:none" onclick="damageRoll('${jstr(p.name)}: ${jstr(a.name)}','${jstr(a.dmg)}')">DMG</button>`:""}</div>`).join("")}
+   </div></div>`;}
+function compHp(i,d){const c=cur();const p=c.companions[i];if(!p)return;
+  const mx=Math.max(1,+p.hpMax||1);
+  p.hpCur=Math.max(0,Math.min(mx,(+p.hpCur||0)+d));
+  /* a summon or a form that hits 0 is gone — and it releases the concentration it was holding */
+  if(p.hpCur<=0&&compActive(p)&&(compKind(p)==="summon"||compKind(p)==="form")){
+    p.active=false;
+    if(p.conc&&c.concentration===p.name)c.concentration=null;
+    toast((compKind(p)==="form"?"🐻 ":"✨ ")+esc(p.name)+" dropped to 0 HP — "+(compKind(p)==="form"?"you revert to your own form":"the summon ends"),5000);}
+  touch();renderTab();}
+function toggleCompActive(i){const c=cur();const p=c.companions[i];if(!p)return;
+  if(!compActive(p)){
+    if(p.conc&&concentrationBlocked(p.name))return; /* declined: nothing is summoned */
+    p.active=true;
+    if((+p.hpCur||0)<=0)p.hpCur=Math.max(1,+p.hpMax||1); /* re-summoned at full health */
+    if(p.conc)setConcentration(p.name);
+    toast(COMP_KINDS[compKind(p)].ic+" "+esc(p.name)+(p.conc?" — 🧠 concentrating":""));}
+  else{
+    p.active=false;
+    if(p.conc&&c.concentration===p.name)c.concentration=null;
+    toast("◻️ "+esc(p.name)+" dismissed");}
+  touch();renderTab();}
+/* Concentration ending takes every concentration summon with it. */
+function dismissConcSummons(c){let n=0;
+  (c.companions||[]).forEach(p=>{if(p.conc&&compActive(p)){p.active=false;n++;}});
+  return n;}
 function compAtkRow(a){return `<div class="row compatk" style="margin-bottom:6px">
   <input class="caN" placeholder="Bite" value="${esc(a&&a.name||"")}">
   <input class="caH" type="number" placeholder="+5" value="${a&&a.hit!=null?a.hit:""}" style="max-width:70px">
   <input class="caD" placeholder="1d8+3" value="${esc(a&&a.dmg||"")}">
   <button class="iconbtn" style="flex:none" onclick="this.parentElement.remove()">✕</button></div>`;}
 function compEditor(i){const c=cur();
-  const p=i>=0?c.companions[i]:{name:"",ac:12,speed:30,hpMax:10,hpCur:10,notes:"",attacks:[]};
-  openModal(`<h2>${i>=0?"Edit":"New"} companion ${XBTN}</h2>
-   <label>Name</label><input id="cp_name" value="${esc(p.name)}" placeholder="Wolf / Bear form / Familiar"><div class="spacer"></div>
+  const p=i>=0?c.companions[i]:{name:"",kind:"companion",ac:12,speed:30,hpMax:10,hpCur:10,init:0,conc:false,notes:"",attacks:[]};
+  openModal(`<h2>${i>=0?"Edit":"New"} ally ${XBTN}</h2>
+   <label>Name</label><input id="cp_name" value="${esc(p.name)}" placeholder="Wolf / Bear form / Pseudodragon"><div class="spacer"></div>
+   <label>Type</label>
+   <select id="cp_kind">${COMP_ORDER.map(k=>`<option value="${k}" ${compKind(p)===k?"selected":""}>${COMP_KINDS[k].ic} ${COMP_KINDS[k].one} — ${COMP_KINDS[k].hint}</option>`).join("")}</select>
+   <div class="spacer"></div>
    <div class="grid3">
     <div><label>AC</label><input id="cp_ac" type="number" value="${p.ac}"></div>
     <div><label>Max HP</label><input id="cp_hp" type="number" value="${p.hpMax}"></div>
     <div><label>Speed</label><input id="cp_speed" type="number" value="${p.speed||30}"></div></div>
+   <div class="spacer"></div>
+   <div class="grid2">
+    <div><label>Initiative modifier</label><input id="cp_init" type="number" value="${+p.init||0}"></div>
+    <div style="display:flex;align-items:flex-end;padding-bottom:4px"><label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:0">
+      <input type="checkbox" id="cp_conc" ${p.conc?"checked":""}> Needs concentration</label></div></div>
+   <div class="dim" style="margin-top:3px">With concentration ticked, summoning claims your concentration and losing it dismisses this creature automatically.</div>
    <div class="spacer"></div><label>Notes (senses, traits…)</label><input id="cp_notes" value="${esc(p.notes||"")}">
    <div class="spacer"></div><label>Attacks — name / to-hit / damage</label>
    <div id="compAtks">${(p.attacks&&p.attacks.length?p.attacks:[{}]).map(compAtkRow).join("")}</div>
@@ -1799,11 +1940,14 @@ function compEditor(i){const c=cur();
 function compSave(i){const c=cur();
   const attacks=$$("#compAtks .compatk").map(r=>({name:r.querySelector(".caN").value.trim(),hit:+r.querySelector(".caH").value||0,dmg:r.querySelector(".caD").value.trim()})).filter(a=>a.name);
   const old=i>=0?c.companions[i]:{};
-  const p={id:old.id||uid(),name:$("#cp_name").value.trim()||"Companion",ac:+$("#cp_ac").value||10,
-    hpMax:Math.max(1,+$("#cp_hp").value||1),hpCur:Math.min(old.hpCur??(+$("#cp_hp").value||1),Math.max(1,+$("#cp_hp").value||1)),
+  const mx=Math.max(1,+$("#cp_hp").value||1);
+  const p={id:old.id||uid(),name:$("#cp_name").value.trim()||"Companion",
+    kind:$("#cp_kind").value,conc:$("#cp_conc").checked,
+    ac:+$("#cp_ac").value||10,hpMax:mx,hpCur:Math.min(old.hpCur??mx,mx),
+    init:+$("#cp_init").value||0,active:old.active!==false,src:old.src,
     speed:+$("#cp_speed").value||30,notes:$("#cp_notes").value.trim(),attacks};
   i>=0?c.companions[i]=p:c.companions.push(p);
-  touch();closeModal();renderTab();}
+  touch();closeModal();setTab("comp");}
 function ammoItem(c,a){if(!a.ammoId)return null;
   return (c.inventory.items||[]).find(it=>(it.id||it.name)===a.ammoId)||null;}
 function rollAttackHit(i){const c=cur();const a=c.attacks[i];
@@ -1889,7 +2033,62 @@ function applyHealing(n){const c=cur();if(!c)return;
   c.hp.current=Math.min(maxHP(c),c.hp.current+n);
   if(was<=0&&c.hp.current>0)c.deathSaves={s:0,f:0};
   touch();renderTab();}
-function hpDelta(d){d<0?applyDamage(-d):applyHealing(d);}
+/* Tapping ± used to apply immediately, so seven taps meant seven damage events — and seven
+   concentration prompts. Taps now accumulate into one visible pending total that commits
+   together, either after a pause or when you tap Apply. Works for the character and for
+   anything on the Allies tab. */
+let hpPending={t:null,d:0,timer:null};
+let lastHpUndo=null;
+const HP_COMMIT_MS=1500;
+function previewHp(c,d){
+  if(d>=0)return Math.min(maxHP(c),c.hp.current+d);
+  const absorbed=Math.min(+c.hp.temp||0,-d);
+  return Math.max(0,c.hp.current-((-d)-absorbed));}
+function tallyHp(target,d){
+  if(hpPending.t&&hpPending.t!==target)commitHp(); /* changing target commits the previous tally */
+  hpPending.t=target;hpPending.d+=d;
+  clearTimeout(hpPending.timer);
+  if(!hpPending.d){hpPending={t:null,d:0,timer:null};renderTab();return;}
+  hpPending.timer=setTimeout(commitHp,HP_COMMIT_MS);
+  renderTab();}
+function cancelHp(){clearTimeout(hpPending.timer);hpPending={t:null,d:0,timer:null};renderTab();}
+function commitHp(){
+  clearTimeout(hpPending.timer);
+  const t=hpPending.t,d=hpPending.d;
+  hpPending={t:null,d:0,timer:null};
+  const c=cur();
+  if(!t||!d||!c){renderTab();return;}
+  if(t==="c"){
+    lastHpUndo={t:"c",hp:{...c.hp},death:{...c.deathSaves},conc:c.concentration,
+      buffs:[...(c.activeBuffs||[])],comps:(c.companions||[]).map(p=>p.active!==false)};
+    const hadConc=!!c.concentration;
+    d<0?applyDamage(-d):applyHealing(d);
+    const lost=hadConc&&!c.concentration;
+    toast(`<div><b>${d<0?"Damage":"Healing"} ${fmt(d)}</b></div>
+      <div class="big">${c.hp.current}<span style="font-size:16px;color:var(--dim)"> / ${maxHP(c)}</span></div>
+      ${c.hp.temp?`<div class="dim">+${c.hp.temp} temp HP left</div>`:""}
+      ${lost?'<div class="dim">🧠 concentration ended</div>':""}
+      <div class="dice-adv"><button class="pill" onclick="undoHp()">↩ Undo</button></div>`,5000);}
+  else{
+    const i=(c.companions||[]).findIndex(x=>x.id===t);
+    if(i<0){renderTab();return;}
+    const p=c.companions[i];
+    lastHpUndo={t,hp:+p.hpCur||0,active:p.active,conc:c.concentration};
+    compHp(i,d);
+    toast(`<div><b>${esc(p.name)} ${fmt(d)}</b></div>
+      <div class="big">${p.hpCur}<span style="font-size:16px;color:var(--dim)"> / ${p.hpMax}</span></div>
+      <div class="dice-adv"><button class="pill" onclick="undoHp()">↩ Undo</button></div>`,5000);}
+  renderTab();}
+function undoHp(){const c=cur();const u=lastHpUndo;
+  if(!c||!u){toast("Nothing to undo");return;}
+  lastHpUndo=null;
+  if(u.t==="c"){
+    c.hp={...u.hp};c.deathSaves={...u.death};c.concentration=u.conc;c.activeBuffs=[...u.buffs];
+    (c.companions||[]).forEach((p,j)=>{if(u.comps&&u.comps[j]!==undefined)p.active=u.comps[j];});}
+  else{const p=(c.companions||[]).find(x=>x.id===u.t);
+    if(p){p.hpCur=u.hp;p.active=u.active;}
+    c.concentration=u.conc;}
+  touch();renderTab();toast("↩ Undone");}
 function hpPrompt(sign){const v=prompt(sign<0?"Damage taken":"Healing received");if(v===null)return;
   const n=Math.abs(+v||0);
   sign<0?applyDamage(n):applyHealing(n);}
@@ -2057,7 +2256,8 @@ function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and 
   c.features.forEach(f=>{if(f.uses)f.usesLeft=maxUses(c,f);});
   c.spellcasting.spells.forEach(s=>{if(s.uses)s.usesLeft=+s.uses;}); /* incl. 🌅 dawn & 🌙 */
   c.activeBuffs=[];c.concentration=null; /* temporary effects end */
-  touch();renderTab();toast("☀️ Long rest complete!");}
+  const gone=dismissConcSummons(c);
+  touch();renderTab();toast("☀️ Long rest complete!"+(gone?" ("+gone+" summon"+(gone>1?"s":"")+" dismissed)":""));}
 function dmgPartRow(p){return `<div class="row dmgpart" style="margin-bottom:6px">
   <input class="dpD" placeholder="1d8 or 2d6+1" value="${esc(p&&p.d||"")}">
   <input class="dpT" placeholder="type (slashing, fire…)" value="${esc(p&&p.t||"")}">
@@ -2129,6 +2329,7 @@ function cycleSkill(k){const c=cur();c.skills[k]=((c.skills[k]||0)+1)%3;touch();
 
 /* ================== SPELLS TAB ================== */
 function renderSpells(){const c=cur();const sc=c.spellcasting;const pb=profBonus(c);
+  const _open=openKeys();
   const dc=spellDC(c), atk=spellAtkMod(c);
   const grouped={};sc.spells.forEach((s,i)=>{(grouped[s.level]=grouped[s.level]||[]).push([s,i]);});
   const levels=Object.keys(grouped).map(Number).sort((a,b)=>a-b);
@@ -2195,10 +2396,10 @@ function renderSpells(){const c=cur();const sc=c.spellcasting;const pb=profBonus
     <div class="dim" id="prepInfo" style="margin-bottom:${capInfo?"6px":"0"}">${capInfo}</div>
     ${sc.spells.length?levels.map(lv=>`
       <div class="dim" style="margin:10px 0 6px;font-weight:700">${lv===0?"CANTRIPS":"LEVEL "+lv}</div>
-      ${grouped[lv].map(([s,i])=>`<div class="li" id="sp_${i}">
+      ${grouped[lv].map(([s,i])=>`<div class="li" id="sp_${i}" data-k="s:${esc(s.name)}">
         <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
           ${lv>0&&!s.always&&!s.fromItem?`<input type="checkbox" ${s.prepared?"checked":""} onclick="event.stopPropagation()" onchange="setPrepared(${i},this.checked)" title="Prepared">`:""}
-          <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}${s.always?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">always</span>':""}${s.fromItem?`<span class="tag c">🎁 ${esc(s.fromItem)}</span>`:""}
+          <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}${s.always?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">always</span>':""}${s.fromItem?`<span class="tag c">🎁 ${esc(s.fromItem)}</span>`:""}${s.fromFeature?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="granted by a feature">📜 ${esc(s.fromFeature)}</span>`:""}
             <div class="li-sub">${esc(s.time||"")}${s.range?" · "+esc(s.range):""}${s.uses?` · ${s.usesLeft??s.uses}/${s.uses} uses ${s.recharge==="dawn"?"🌅":s.recharge==="short"?"🌙":"☀️"}`:""}</div></div>
           ${s.uses?`<button class="btn small" onclick="event.stopPropagation();castItemSpell(${i})">Cast</button>`
             :lv>0?`<button class="btn small" onclick="event.stopPropagation();castSpell(${lv},${s.conc?`'${jstr(s.name)}'`:"null"})">Cast</button>`:""}
@@ -2208,7 +2409,8 @@ function renderSpells(){const c=cur();const sc=c.spellcasting;const pb=profBonus
           <p>${esc(s.desc||"").replace(/\n+/g,"</p><p>")}</p>
           ${s.higher?`<p><b>At higher levels.</b> ${esc(s.higher)}</p>`:""}</div>
       </div>`).join("")}`).join(""):'<div class="empty">No spells yet. Add from the SRD library or create custom ones.</div>'}
-  </div>`;}
+  </div>`;
+  restoreOpen(_open);}
 function setPrepared(i,v){const c=cur();const s=c.spellcasting.spells[i];if(!s)return;
   s.prepared=!!v;touch();
   const el=$("#prepInfo");if(el)el.innerHTML=preparedInfo(c); /* update the counter in place, don't collapse open spells */}
@@ -2423,6 +2625,7 @@ function castItemSpell(i){const s=cur().spellcasting.spells[i];const mx=+s.uses|
 /* ================== INVENTORY TAB ================== */
 function coinsToGp(cu){return cu.pp*10+cu.gp+cu.ep*0.5+cu.sp*0.1+cu.cp*0.01;}
 function renderInv(){const c=cur();const inv=c.inventory;
+  const _open=openKeys();
   const enc=encumbrance(c);
   const totW=enc.w,cap=enc.cap;
   const attuned=inv.items.filter(i=>i.attuned).length;
@@ -2448,13 +2651,14 @@ function renderInv(){const c=cur();const inv=c.inventory;
     <input placeholder="🔍 Filter items…" oninput="filterItems(this.value)" id="invFilter">
     <div class="spacer"></div>
     <div id="itemList">${inv.items.length?inv.items.map((it,i)=>itemRow(it,i)).join(""):'<div class="empty">Backpack is empty</div>'}</div>
-  </div>`;}
+  </div>`;
+  restoreOpen(_open);}
 function itemRow(it,i){const c=cur();
   const sub=[it.cat||"",it.cat==="Armor"&&it.armor?"AC "+it.armor.base+(it.armor.dexCap===0?"":it.armor.dexCap?" +Dex(max "+it.armor.dexCap+")":" +Dex"):"",
     it.cat==="Weapon"&&it.weapon?(it.weapon.parts&&it.weapon.parts.length?it.weapon.parts.map(p=>esc(p.d)+(p.t?" "+esc(p.t):"")).join(" + "):esc(it.weapon.dmg||"")+" "+esc(it.weapon.type||"")):"",
     it.magic?"+"+it.magic:"",it.weight?it.weight+" lb":"",it.cost?esc(it.cost):""].filter(Boolean).join(" · ");
   const fx=(it.effects||[]).length?` <span style="color:var(--gold)" title="grants bonuses">✦</span>`:"";
-  return `<div class="li" data-nm="${esc(it.name.toLowerCase())}">
+  return `<div class="li" data-nm="${esc(it.name.toLowerCase())}" data-k="i:${esc(it.id||it.name)}">
   <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
     <div class="li-title">${esc(it.name)}${it.qty>1?" ×"+it.qty:""}${fx}
       ${it.equipped?'<span class="tag" style="color:var(--green);border-color:var(--green)">equipped</span>':""}
@@ -2567,19 +2771,26 @@ function saveItem(i){const inv=cur().inventory;
 const KIND_TAG={action:"⚡ action",bonus:"⚡ bonus action",reaction:"⚡ reaction",active:"⚡ active"};
 function featLi(c,f,i){const mx=maxUses(c,f);const kind=featKind(f);
   const fx=(f.effects||[]).length?` <span style="color:var(--gold)" title="grants automatic bonuses">✦</span>`:"";
-  return `<div class="li">
+  const g=f.grants||{};
+  return `<div class="li" data-k="f:${esc(f.name)}">
    <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-    <div class="li-title">${esc(f.name)}${fx} ${f.source==="feat"?'<span class="tag" style="color:var(--accent2);border-color:var(--accent2)">feat</span>':""}${f.source==="race"?'<span class="tag" style="color:var(--blue);border-color:var(--blue)">race</span>':""}${f.source==="background"?'<span class="tag" style="color:var(--green);border-color:var(--green)">background</span>':""}${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${kind!=="passive"?`<span class="tag">${KIND_TAG[kind]||kind}</span>`:""}${f.slotCast?'<span class="tag c">uses spell slot</span>':""}${f.ph&&f.desc===PH_TEXT?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">paste text</span>':""}
+    <div class="li-title">${esc(f.name)}${fx} ${f.source==="feat"?'<span class="tag" style="color:var(--accent2);border-color:var(--accent2)">feat</span>':""}${f.source==="race"?'<span class="tag" style="color:var(--blue);border-color:var(--blue)">race</span>':""}${f.source==="background"?'<span class="tag" style="color:var(--green);border-color:var(--green)">background</span>':""}${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${kind!=="passive"?`<span class="tag">${KIND_TAG[kind]||kind}</span>`:""}${f.slotCast?'<span class="tag c">uses spell slot</span>':""}${(g.spells||[]).length?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="grants spells">✨ ${g.spells.length}</span>`:""}${(g.summons||[]).length?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="can summon a creature">🐾 ${g.summons.length}</span>`:""}${f.ph&&f.desc===PH_TEXT?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">paste text</span>':""}
      ${mx>0?`<div class="li-sub">${f.usesLeft??mx}/${mx} uses · ${f.recharge==="short"?"🌙 short rest":f.recharge==="short1"?"🌙 +1 per short rest":"☀️ long rest"}</div>`:""}</div>
     ${mx>0?`<button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>
     <button class="iconbtn" title="Undo use" onclick="event.stopPropagation();undoFeature(${i})">↩</button>`:""}
+    <button class="iconbtn" title="${f.fav?"Unpin from the top":"Pin to the top"}" onclick="event.stopPropagation();toggleFav(${i})">${f.fav?"⭐":"☆"}</button>
     <button class="iconbtn" onclick="event.stopPropagation();editFeature(${i})">✏️</button></div>
    <div class="li-body">
     ${(f.effects||[]).length?`<p class="dim">Bonuses: ${f.effects.map(fxLabel).join(", ")} — applied automatically.</p>`:""}
+    ${(g.spells||[]).length?`<div class="row" style="margin:8px 0"><span style="flex:1" class="dim">✨ Grants: ${g.spells.map(esc).join(", ")}</span>
+      <button class="btn ghost small" style="flex:none" onclick="grantSpells(${i})">Add to Spells</button></div>`:""}
+    ${(g.summons||[]).map((t,j)=>`<div class="row" style="margin:8px 0"><span style="flex:1" class="dim">${COMP_KINDS[t.kind]?COMP_KINDS[t.kind].ic:"🐾"} ${esc(t.name)} — AC ${+t.ac||10} · ${+t.hpMax||1} HP · Speed ${+t.speed||30}${t.conc?" · 🧠 concentration":""}</span>
+      <button class="btn ghost small" style="flex:none" onclick="summonFromFeature(${i},${j})">Summon</button></div>`).join("")}
     <p>${esc(f.desc||"").replace(/\n+/g,"</p><p>")}</p></div></div>`;}
 function renderFeat(){const c=cur();
-  const act=[],pas=[];
-  c.features.forEach((f,i)=>(isActiveFeat(f)?act:pas).push([f,i]));
+  const _open=openKeys();
+  const fav=[],act=[],pas=[];
+  c.features.forEach((f,i)=>{if(f.fav)fav.push([f,i]);else (isActiveFeat(f)?act:pas).push([f,i]);});
   const list=arr=>arr.map(([f,i])=>featLi(c,f,i)).join("");
   $("#scr-feat").innerHTML=`
   <div class="card">
@@ -2589,8 +2800,10 @@ function renderFeat(){const c=cur();
       <button class="pill" onclick="editFeature(-1)">＋ Add</button></div></div>
     ${SRD.classes?"":'<div class="dim" style="margin-bottom:8px">💡 Download the SRD library (⚙️ on home screen) to auto-add class & subclass features.</div>'}
     ${c.features.length?`
-      ${act.length?`<div class="dim" style="margin:6px 0;font-weight:700;letter-spacing:.05em">⚡ ACTIVE — actions, limited uses</div>`+list(act):""}
-      ${pas.length?`<div class="dim" style="margin:14px 0 6px;font-weight:700;letter-spacing:.05em">🧬 PASSIVE — always on</div>`+list(pas):""}`
+      ${fav.length?`<div class="dim" style="margin:6px 0;font-weight:700;letter-spacing:.05em;color:var(--gold)">⭐ PINNED — always on top</div>`+list(fav):""}
+      ${act.length?`<div class="dim" style="margin:${fav.length?"14px":"6px"} 0 6px;font-weight:700;letter-spacing:.05em">⚡ ACTIVE — actions, limited uses</div>`+list(act):""}
+      ${pas.length?`<div class="dim" style="margin:14px 0 6px;font-weight:700;letter-spacing:.05em">🧬 PASSIVE — always on</div>`+list(pas):""}
+      ${fav.length?'<div class="dim" style="margin-top:10px">☆ on any feature pins it to the top of this list.</div>':""}`
      :'<div class="empty">No features yet — class features, racial traits, feats…</div>'}
   </div>
   <div class="card"><h2>Proficiencies & languages</h2>
@@ -2610,7 +2823,8 @@ function renderFeat(){const c=cur();
         <button class="iconbtn" onclick="event.stopPropagation();journalEdit(${i})">✏️</button></div>
       <div class="li-body"><p>${esc(j.text||"").replace(/\n+/g,"</p><p>")}</p></div></div>`).join("")
      :'<div class="empty">Session log, quests, NPCs — add entries as you play</div>'}
-  </div>`;}
+  </div>`;
+  restoreOpen(_open);}
 function journalEdit(i){const c=cur();
   const j=i>=0?c.journal[i]:{title:"",text:""};
   openModal(`<h2>${i>=0?"Edit":"New"} journal entry ${XBTN}</h2>
@@ -2623,6 +2837,76 @@ function journalSave(i){const c=cur();
   const j={id:i>=0?c.journal[i].id:uid(),ts:i>=0?c.journal[i].ts:Date.now(),
     title:$("#jr_title").value.trim(),text:$("#jr_text").value};
   i>=0?c.journal[i]=j:c.journal.unshift(j);
+  touch();closeModal();renderTab();}
+/* ---- what a feature hands you: spells and creatures ---- */
+function attacksToText(list){return (list||[]).map(a=>`${a.name} ${fmt(+a.hit||0)}${a.dmg?" "+a.dmg:""}`.trim()).join("; ");}
+function textToAttacks(t){return String(t||"").split(/[;\n]/).map(l=>l.trim()).filter(Boolean).map(l=>{
+  const m=/^(.+?)\s+([+-]\d+)(?:\s+(.*))?$/.exec(l);
+  return m?{name:m[1].trim(),hit:+m[2],dmg:(m[3]||"").trim()}:{name:l,hit:0,dmg:""};});}
+function grantSummonRow(g){g=g||{};
+  return `<div class="row gsrow" style="margin-bottom:10px;flex-wrap:wrap;align-items:flex-start">
+  <input class="gsN" style="flex:2 1 140px" placeholder="Creature name" value="${esc(g.name||"")}">
+  <select class="gsK" style="flex:1 1 120px">${COMP_ORDER.map(k=>`<option value="${k}" ${(g.kind||"summon")===k?"selected":""}>${COMP_KINDS[k].ic} ${COMP_KINDS[k].one}</option>`).join("")}</select>
+  <button class="iconbtn" style="flex:none" onclick="this.parentElement.remove()">✕</button>
+  <input class="gsA" type="number" style="flex:1 1 60px" placeholder="AC" value="${g.ac!=null?g.ac:""}">
+  <input class="gsH" type="number" style="flex:1 1 60px" placeholder="HP" value="${g.hpMax!=null?g.hpMax:""}">
+  <input class="gsS" type="number" style="flex:1 1 60px" placeholder="Speed" value="${g.speed!=null?g.speed:""}">
+  <input class="gsI" type="number" style="flex:1 1 60px" placeholder="Init" value="${g.init!=null?g.init:""}">
+  <label style="flex:none;display:flex;align-items:center;gap:4px;text-transform:none;font-size:13px;margin:0;padding-top:8px"><input type="checkbox" class="gsC" ${g.conc?"checked":""}> 🧠 conc.</label>
+  <input class="gsT" style="flex:1 1 100%" placeholder="Attacks, one per line or ; separated — e.g. Bite +5 1d6+3" value="${esc(attacksToText(g.attacks))}">
+  </div>`;}
+function grantsCollect(){
+  const el=$("#ft_grantSpells");
+  const spells=String((el&&el.value)||"").split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
+  const summons=$$("#gsList .gsrow").map(r=>({
+    name:r.querySelector(".gsN").value.trim(),
+    kind:r.querySelector(".gsK").value,
+    ac:+r.querySelector(".gsA").value||10,
+    hpMax:Math.max(1,+r.querySelector(".gsH").value||1),
+    speed:+r.querySelector(".gsS").value||30,
+    init:+r.querySelector(".gsI").value||0,
+    conc:r.querySelector(".gsC").checked,
+    attacks:textToAttacks(r.querySelector(".gsT").value)})).filter(g=>g.name);
+  return (spells.length||summons.length)?{spells,summons}:undefined;}
+function grantSpells(i){const c=cur();const f=c.features[i];if(!f)return;
+  const names=((f.grants||{}).spells)||[];
+  const lib=spellsFor(c)||[];
+  let added=0,stub=0;
+  names.forEach(nm=>{
+    if(c.spellcasting.spells.some(x=>String(x.name).toLowerCase()===nm.toLowerCase()))return;
+    const s=lib.find(x=>String(x.name).toLowerCase()===nm.toLowerCase());
+    if(s)c.spellcasting.spells.push({name:s.name,level:s.level,school:s.school,time:s.time,range:s.range,
+      components:s.components,duration:s.duration,conc:s.conc,ritual:s.ritual,desc:s.desc,higher:s.higher,
+      prepared:true,always:true,fromFeature:f.name,source:"srd"}),added++;
+    else c.spellcasting.spells.push({name:nm,level:1,school:"",time:"",range:"",components:"",duration:"",
+      conc:false,ritual:false,prepared:true,always:true,fromFeature:f.name,source:"custom",
+      desc:"Granted by "+f.name+". This spell isn't in the downloaded SRD library — tap ⋮ → Edit to fill in level and text."}),stub++;});
+  touch();renderTab();
+  toast((added+stub)?`✨ ${added+stub} spell${added+stub>1?"s":""} added as always prepared${stub?` — ${stub} need${stub>1?"":"s"} details filled in`:""}`
+    :"Those spells are already on your sheet");}
+function summonFromFeature(i,j){const c=cur();const f=c.features[i];if(!f)return;
+  const tpl=((f.grants||{}).summons||[])[j];if(!tpl)return;
+  if(tpl.conc&&concentrationBlocked(tpl.name))return; /* declined: nothing is summoned */
+  const mx=Math.max(1,+tpl.hpMax||1);
+  const p={id:uid(),name:tpl.name,kind:COMP_KINDS[tpl.kind]?tpl.kind:"summon",
+    ac:+tpl.ac||10,hpMax:mx,hpCur:mx,speed:+tpl.speed||30,init:+tpl.init||0,
+    conc:!!tpl.conc,active:true,src:f.name,notes:tpl.notes||"",
+    attacks:(tpl.attacks||[]).map(a=>({...a}))};
+  c.companions.push(p);
+  if(p.conc)setConcentration(p.name);
+  touch();renderTab();
+  toast(COMP_KINDS[p.kind].ic+" "+esc(p.name)+" summoned — see 🐾 Allies"+(p.conc?" · 🧠 concentrating":""));}
+function toggleFav(i){const c=cur();const f=c.features[i];if(!f)return;
+  f.fav=!f.fav;touch();renderTab();
+  toast(f.fav?"⭐ "+esc(f.name)+" pinned to the top":"☆ "+esc(f.name)+" unpinned");}
+function deleteFeature(i){const c=cur();const f=c.features[i];if(!f)return;
+  const sp=c.spellcasting.spells.filter(x=>x.fromFeature===f.name);
+  const co=(c.companions||[]).filter(x=>x.src===f.name);
+  c.features.splice(i,1);
+  if(sp.length&&confirm(`Also remove the ${sp.length} spell(s) this feature granted?`))
+    c.spellcasting.spells=c.spellcasting.spells.filter(x=>x.fromFeature!==f.name);
+  if(co.length&&confirm(`Also remove the ${co.length} creature(s) it summoned?`))
+    c.companions=c.companions.filter(x=>x.src!==f.name);
   touch();closeModal();renderTab();}
 function useFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
   if(f.usesLeft===undefined)f.usesLeft=mx;
@@ -2656,10 +2940,19 @@ function editFeature(i){const c=cur();
       <input type="checkbox" id="ft_slot" ${f.slotCast?"checked":""}> Consumes a spell slot (shows in Spells tab)</label></div>
    </div><div class="spacer"></div>
    ${fxEditor(f.effects)}
+   <hr><h3>Grants</h3>
+   <p class="dim">What this feature hands you. Spells are added to the Spells tab as <b>always prepared</b>; creatures appear on the 🐾 Allies tab with their own HP and attack rolls.</p>
+   <label>Spells granted — comma or line separated</label>
+   <input id="ft_grantSpells" list="srdSpellNames" placeholder="e.g. Misty Step, Moonbeam" value="${esc(((f.grants||{}).spells||[]).join(", "))}">
+   <datalist id="srdSpellNames">${(spellsFor(c)||[]).slice(0,900).map(x=>`<option value="${esc(x.name)}">`).join("")}</datalist>
+   <div class="spacer"></div>
+   <label>Creatures this feature can summon</label>
+   <div id="gsList">${((f.grants||{}).summons||[]).map(grantSummonRow).join("")}</div>
+   <button class="btn ghost small" type="button" onclick="$('#gsList').insertAdjacentHTML('beforeend',grantSummonRow())">＋ Add creature</button>
    <div class="spacer"></div>
    <label>Description</label><textarea id="ft_desc">${esc(f.desc)}</textarea><div class="spacer"></div>
    <div class="row">
-   ${i>=0?`<button class="btn danger" onclick="cur().features.splice(${i},1);touch();closeModal();renderTab()">Delete</button>`:""}
+   ${i>=0?`<button class="btn danger" onclick="deleteFeature(${i})">Delete</button>`:""}
    <button class="btn" onclick="saveFeature(${i})">Save</button></div>`);}
 function saveFeature(i){const c=cur();
   const raw=$("#ft_uses").value.trim();
@@ -2667,9 +2960,10 @@ function saveFeature(i){const c=cur();
     uses:raw===""||raw==="0"?0:(/^\d+$/.test(raw)?+raw:raw),
     recharge:$("#ft_recharge").value,desc:$("#ft_desc").value,
     kind:$("#ft_kind").value||undefined,slotCast:$("#ft_slot").checked||undefined,
-    effects:fxCollect()};
+    effects:fxCollect(),grants:grantsCollect()};
   if(i>=0){const old=c.features[i]; /* keep class-feature identity so resync doesn't duplicate */
     if(old.fid){f.fid=old.fid;f.cls=old.cls;f.minLv=old.minLv;f.source=old.source;}
+    if(old.fav)f.fav=true; /* a pin survives editing */
     if(old.source==="feat")f.source="feat";
     f.fxEdited=true;
     if(old.ph&&f.desc!==PH_TEXT)f.ph=undefined;else if(old.ph)f.ph=true;}
@@ -3188,18 +3482,18 @@ function runSelfTests(){
     applyDamage(6);eq(c.hp.temp,0);eq(c.hp.current,16);});
   t("the − button and the Damage prompt behave identically",()=>{
     const a=mk(x=>{x.hp={max:20,current:20,temp:2};});
-    hpDelta(-1);eq(a.hp.temp,1,"− button eats temp HP");
+    tallyHp("c",-1);commitHp();eq(a.hp.temp,1,"− button eats temp HP");
     const b=mk(x=>{x.hp={max:20,current:20,temp:2};});
     applyDamage(1);eq(b.hp.temp,1,"prompt does the same");});
   t("the − button also triggers the concentration save",()=>{
     const c=mk(x=>{x.hp={max:20,current:10,temp:0};x.concentration="Bless";});
     let asked=0;openModal=()=>{asked++;};
-    try{hpDelta(-1);}finally{openModal=()=>{};}
+    try{tallyHp("c",-1);commitHp();}finally{openModal=()=>{};}
     eq(asked,1,"− button prompts the CON save, exactly like Damage…");
     eq(c.hp.current,9);});
   t("the − button ends concentration when it drops you to 0",()=>{
     const c=mk(x=>{x.hp={max:20,current:1,temp:0};x.concentration="Bless";x.activeBuffs=["Bless"];});
-    hpDelta(-1);
+    tallyHp("c",-1);commitHp();
     eq(c.hp.current,0);eq(c.concentration,null,"unconscious ends concentration");
     eq(c.activeBuffs.length,0);});
   t("dropping to 0 HP ends concentration and its buff",()=>{
@@ -3505,6 +3799,220 @@ function runSelfTests(){
     const c=mk(x=>{x.classes=[{name:"Fighter",subclass:"",level:5}];});
     eq(preparedInfo(c),"");});
 
+
+  /* ---- batched HP: taps accumulate, then land once ---- */
+  t("taps accumulate into one pending total",()=>{
+    const c=mk(x=>{x.hp={max:40,current:40,temp:0};});
+    tallyHp("c",-1);tallyHp("c",-1);tallyHp("c",-1);
+    eq(hpPending.d,-3,"three taps, one pending total");
+    eq(c.hp.current,40,"nothing applied yet");
+    commitHp();
+    eq(c.hp.current,37);eq(hpPending.d,0,"tally cleared");});
+  t("seven taps make ONE concentration check, not seven",()=>{
+    const c=mk(x=>{x.hp={max:40,current:40,temp:0};x.concentration="Bless";});
+    let asked=0;openModal=()=>{asked++;};
+    try{for(let i=0;i<7;i++)tallyHp("c",-1);commitHp();}finally{openModal=()=>{};}
+    eq(asked,1,"one prompt for the whole 7 damage");
+    eq(c.hp.current,33);});
+  t("cancelling a tally changes nothing",()=>{
+    const c=mk(x=>{x.hp={max:40,current:40,temp:0};});
+    tallyHp("c",-5);cancelHp();
+    eq(c.hp.current,40);eq(hpPending.d,0);});
+  t("tapping back to zero clears the tally",()=>{
+    const c=mk(x=>{x.hp={max:40,current:40,temp:0};});
+    tallyHp("c",-1);tallyHp("c",1);
+    eq(hpPending.d,0);eq(hpPending.t,null);eq(c.hp.current,40);});
+  t("the preview accounts for temporary HP",()=>{
+    const c=mk(x=>{x.hp={max:40,current:30,temp:5};});
+    eq(previewHp(c,-8),27,"5 absorbed, 3 through");
+    eq(previewHp(c,-4),30,"fully absorbed");
+    eq(previewHp(c,6),36);
+    eq(previewHp(c,50),40,"capped at max");});
+  t("undo restores HP, death saves and concentration together",()=>{
+    const c=mk(x=>{x.hp={max:20,current:3,temp:2};x.concentration="Bless";x.activeBuffs=["Bless"];
+      x.deathSaves={s:1,f:1};});
+    for(let i=0;i<9;i++)tallyHp("c",-1);
+    commitHp();
+    eq(c.hp.current,0);eq(c.concentration,null);
+    undoHp();
+    eq(c.hp.current,3);eq(c.hp.temp,2);eq(c.concentration,"Bless");
+    eq(c.activeBuffs.join(),"Bless");eq(c.deathSaves.f,1);});
+  t("switching target commits the tally already in flight",()=>{
+    const c=mk(x=>{x.hp={max:40,current:40,temp:0};
+      x.companions.push({id:"w1",name:"Wolf",kind:"companion",ac:13,hpMax:11,hpCur:11,attacks:[]});});
+    tallyHp("c",-4);
+    tallyHp("w1",-2);
+    eq(c.hp.current,36,"the character's tally landed when the target changed");
+    commitHp();
+    eq(c.companions[0].hpCur,9);});
+
+  /* ---- allies: companions, familiars, summons, forms ---- */
+  t("old untyped companions migrate to the new model",()=>{
+    const c=migrate({name:"Old",classes:[{name:"Druid",level:4}],
+      companions:[{name:"Bear",ac:11,hpMax:19,hpCur:12,attacks:[{name:"Bite",hit:5,dmg:"1d8+3"}]},null]});
+    eq(c.companions.length,1,"null entry dropped");
+    const p=c.companions[0];
+    eq(p.kind,"companion");eq(p.active,true);eq(p.conc,false);ok(p.id,"got an id");
+    eq(p.hpCur,12,"current HP preserved");});
+  t("a summon claims concentration and losing it dismisses the summon",()=>{
+    const c=mk(x=>{x.companions.push({id:"s1",name:"Fey Spirit",kind:"summon",conc:true,
+      ac:13,hpMax:20,hpCur:20,active:false,attacks:[]});});
+    toggleCompActive(0);
+    eq(c.concentration,"Fey Spirit");eq(c.companions[0].active,true);
+    dropConcentration();
+    eq(c.concentration,null);eq(c.companions[0].active,false,"summon dismissed with the concentration");});
+  t("declining a concentration swap summons nothing",()=>{
+    const c=mk(x=>{x.concentration="Haste";
+      x.companions.push({id:"s1",name:"Fey Spirit",kind:"summon",conc:true,ac:13,hpMax:20,hpCur:20,active:false,attacks:[]});});
+    window.confirm=()=>false;
+    try{toggleCompActive(0);}finally{window.confirm=()=>true;}
+    eq(c.companions[0].active,false);eq(c.concentration,"Haste");});
+  t("a summon reduced to 0 HP ends and releases concentration",()=>{
+    const c=mk(x=>{x.concentration="Fey Spirit";
+      x.companions.push({id:"s1",name:"Fey Spirit",kind:"summon",conc:true,ac:13,hpMax:20,hpCur:4,active:true,attacks:[]});});
+    compHp(0,-4);
+    eq(c.companions[0].hpCur,0);eq(c.companions[0].active,false);eq(c.concentration,null);});
+  t("a wild shape form at 0 HP reverts, a pet at 0 HP does not vanish",()=>{
+    const c=mk(x=>{x.companions.push(
+      {id:"f1",name:"Dire Wolf form",kind:"form",conc:false,ac:14,hpMax:37,hpCur:3,active:true,attacks:[]},
+      {id:"p1",name:"Mastiff",kind:"companion",conc:false,ac:12,hpMax:5,hpCur:3,active:true,attacks:[]});});
+    compHp(0,-3);eq(c.companions[0].active,false,"form reverts");
+    compHp(1,-3);eq(c.companions[1].active,true,"a downed pet stays on the sheet");});
+  t("a long rest dismisses concentration summons",()=>{
+    const c=mk(x=>{x.concentration="Fey Spirit";
+      x.companions.push({id:"s1",name:"Fey Spirit",kind:"summon",conc:true,ac:13,hpMax:20,hpCur:20,active:true,attacks:[]},
+                        {id:"p1",name:"Mastiff",kind:"companion",conc:false,ac:12,hpMax:5,hpCur:5,active:true,attacks:[]});});
+    longRest();
+    eq(c.companions[0].active,false,"summon gone");
+    eq(c.companions[1].active,true,"the pet is still there");});
+  t("re-summoning restores a creature to full HP",()=>{
+    const c=mk(x=>{x.companions.push({id:"s1",name:"Spirit",kind:"summon",conc:false,ac:13,hpMax:20,hpCur:0,active:false,attacks:[]});});
+    toggleCompActive(0);
+    eq(c.companions[0].hpCur,20);});
+
+  /* ---- features that hand you things ---- */
+  t("a feature can grant spells, and unknown ones become fill-in stubs",()=>{
+    const keep=SRD.spells2014;
+    SRD.spells2014=[{name:"Misty Step",level:2,school:"conjuration",time:"1 bonus action",range:"Self",
+      components:"V",duration:"Instantaneous",conc:false,ritual:false,desc:"teleport",higher:"",classes:["Paladin"]}];
+    try{
+      const c=mk(x=>{x.edition="2014";
+        x.features.push({name:"Oath Spells",effects:[],grants:{spells:["Misty Step","Made Up Spell"],summons:[]}});});
+      grantSpells(0);
+      const sp=c.spellcasting.spells;
+      eq(sp.length,2);
+      const ms=sp.find(x=>x.name==="Misty Step");
+      eq(ms.level,2,"details pulled from the library");
+      eq(ms.always,true,"added as always prepared");
+      eq(ms.fromFeature,"Oath Spells","tagged with its source");
+      ok(/isn't in the downloaded SRD library/.test(sp.find(x=>x.name==="Made Up Spell").desc));
+      grantSpells(0);
+      eq(c.spellcasting.spells.length,2,"granting twice does not duplicate");
+    }finally{SRD.spells2014=keep;}});
+  t("granted spells stay out of the prepared count",()=>{
+    const c=mk(x=>{x.classes=[{name:"Wizard",subclass:"",level:5}];x.abilities.int=16;
+      x.features.push({name:"Boon",effects:[],grants:{spells:["Something"],summons:[]}});});
+    grantSpells(0);
+    ok(!/1\//.test(preparedInfo(c).split("prepared")[1]||""),"always-prepared grants are not counted");});
+  t("a feature can summon a creature onto the Allies tab",()=>{
+    const c=mk(x=>{x.features.push({name:"Find Familiar",effects:[],grants:{spells:[],summons:[
+      {name:"Pseudodragon",kind:"familiar",ac:13,hpMax:7,speed:15,init:2,conc:false,
+       attacks:[{name:"Sting",hit:4,dmg:"1d4+2"}]}]}});});
+    summonFromFeature(0,0);
+    eq(c.companions.length,1);
+    const p=c.companions[0];
+    eq(p.name,"Pseudodragon");eq(p.kind,"familiar");eq(p.hpCur,7,"summoned at full HP");
+    eq(p.src,"Find Familiar","knows which feature made it");
+    eq(p.attacks[0].dmg,"1d4+2");
+    summonFromFeature(0,0);
+    eq(c.companions.length,2,"summoning twice gives you two creatures");});
+  t("a summoned creature that needs concentration claims it",()=>{
+    const c=mk(x=>{x.features.push({name:"Summon Fey",effects:[],grants:{spells:[],summons:[
+      {name:"Fey Spirit",kind:"summon",ac:13,hpMax:30,speed:40,conc:true,attacks:[]}]}});});
+    summonFromFeature(0,0);
+    eq(c.concentration,"Fey Spirit");
+    eq(c.companions[0].conc,true);});
+  t("attack shorthand round-trips",()=>{
+    const a=textToAttacks("Bite +5 1d6+3; Claw +4 1d4+2\nSlam -1");
+    eq(a.length,3);
+    eq(JSON.stringify(a[0]),JSON.stringify({name:"Bite",hit:5,dmg:"1d6+3"}));
+    eq(a[2].hit,-1);eq(a[2].dmg,"");
+    eq(textToAttacks(attacksToText(a)).length,3,"survives a round trip");});
+  t("deleting a feature offers to take its grants with it",()=>{
+    const c=mk(x=>{x.features.push({name:"Find Familiar",effects:[],grants:{spells:[],summons:[
+      {name:"Owl",kind:"familiar",ac:11,hpMax:1,speed:5,conc:false,attacks:[]}]}});});
+    summonFromFeature(0,0);
+    eq(c.companions.length,1);
+    deleteFeature(0); /* confirm is stubbed to true */
+    eq(c.features.length,0);eq(c.companions.length,0,"the owl went with it");});
+
+  /* ---- favourites ---- */
+  t("pinning a feature puts it above everything else",()=>{
+    const c=mk(x=>{x.features.push({name:"Zeta Passive",effects:[]},{name:"Alpha Pinned",effects:[]});});
+    toggleFav(1);
+    eq(c.features[1].fav,true);
+    renderFeat();
+    const html=document.getElementById("scr-feat").innerHTML;
+    ok(/PINNED/.test(html),"pinned section drawn");
+    ok(html.indexOf("Alpha Pinned")<html.indexOf("Zeta Passive"),"pinned entry comes first");
+    toggleFav(1);
+    eq(c.features[1].fav,false);});
+  t("an active feature can be pinned too, not just passives",()=>{
+    const c=mk(x=>{x.features.push({name:"Second Wind",uses:1,recharge:"short",effects:[],desc:"as a bonus action"});});
+    eq(isActiveFeat(c.features[0]),true);
+    toggleFav(0);
+    renderFeat();
+    ok(/PINNED/.test(document.getElementById("scr-feat").innerHTML));});
+  t("a pin survives a class resync",()=>{
+    const c=mk(x=>{x.features.push({name:"Aura",source:"class",fid:"Paladin|Aura",cls:"Paladin",minLv:6,fav:true,effects:[]});});
+    syncClassFeatures(c);
+    eq(c.features.find(f=>f.name==="Aura").fav,true);});
+  t("a pin survives editing the feature",()=>{
+    const c=mk(x=>{x.features.push({name:"Aura of Courage",source:"class",fid:"Paladin|Aura of Courage",
+      cls:"Paladin",minLv:10,fav:true,effects:[],desc:"You and allies can't be frightened."});});
+    openModal=real.openModal;
+    try{editFeature(0);saveFeature(0);}          /* full editor round-trip: the object is rebuilt */
+    finally{real.closeModal();openModal=()=>{};}
+    eq(c.features[0].fav,true,"still pinned after saving");
+    eq(c.features[0].fid,"Paladin|Aura of Courage","class identity kept too");
+    eq(c.features[0].name,"Aura of Courage");});
+
+  t("a card the player expanded survives a re-render",()=>{
+    const c=mk(x=>{x.features.push({name:"Conjure Animals",effects:[],desc:"text",
+      grants:{spells:["Something"],summons:[]}});});
+    renderFeat();
+    const sel='#scr-feat .li[data-k="f:Conjure Animals"]';
+    document.querySelector(sel).classList.add("open");
+    renderFeat(); /* acting on a feature re-renders the tab */
+    ok(document.querySelector(sel).classList.contains("open"),
+       "the card holding the buttons you are pressing stays open");
+    document.querySelector(sel).classList.remove("open");
+    renderFeat();
+    ok(!document.querySelector(sel).classList.contains("open"),"and a closed card stays closed");});
+
+  /* ---- the status strip ---- */
+  t("the status bar shows transient state and hides when there is none",()=>{
+    const c=mk();
+    renderStatusBar();
+    const el=document.getElementById("statusbar");
+    eq(el.className,"","nothing to show for a healthy character");
+    c.conditions=["Poisoned"];c.exhaustion=2;c.concentration="Bless";
+    renderStatusBar();
+    eq(el.className,"on");
+    ok(/Poisoned/.test(el.innerHTML));ok(/Exhaustion 2/.test(el.innerHTML));ok(/Bless/.test(el.innerHTML));
+    c.conditions=[];c.exhaustion=0;c.concentration=null;
+    renderStatusBar();
+    eq(el.className,"","hidden again");});
+  t("every tab renders without throwing",()=>{
+    const c=mk(x=>{x.conditions=["Poisoned"];x.exhaustion=1;
+      x.companions.push({id:"w",name:"Wolf",kind:"companion",ac:13,hpMax:11,hpCur:11,active:true,attacks:[{name:"Bite",hit:4,dmg:"2d4+2"}]});
+      x.features.push({name:"Pinned thing",fav:true,effects:[]});});
+    ["main","skills","spells","comp","inv","feat"].forEach(tab=>{
+      curTab=tab;
+      ({main:renderMain,skills:renderSkills,spells:renderSpells,comp:renderComp,inv:renderInv,feat:renderFeat})[tab]();
+      ok(document.getElementById("scr-"+tab).innerHTML.length>50,tab+" tab drew something");});
+    curTab="main";});
+
   /* ---- homebrew reaches every picker ---- */
   t("homebrew races are offered in the character editor",()=>{
     const keep=db.customRaces;
@@ -3524,6 +4032,7 @@ function runSelfTests(){
     }finally{real.closeModal();openModal=()=>{};db.customRaces=keep;}});
 
   }finally{
+    cancelHp(); /* never leave a timer that would fire against the restored db */
     save=real.save;toast=real.toast;openModal=real.openModal;closeModal=real.closeModal;renderTab=real.renderTab;
     window.confirm=real.confirm;window.prompt=real.prompt;
     db=JSON.parse(snapshot);

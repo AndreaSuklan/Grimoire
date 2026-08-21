@@ -54,6 +54,16 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.4 — allies, grants, and things that stay in sight
+
+- **🐾 Allies tab** (between Spells and Items). Companions, familiars, summons and Wild Shape forms are no longer a collapsed card at the bottom of Main — they have their own tab, grouped by type, each with its own HP bar, AC, initiative and attack rolls.
+- **Summons are wired to concentration.** Tick "needs concentration" on a creature and summoning it claims your concentration; losing concentration — by dropping it, by a failed save, by being knocked to 0 HP, or by taking a long rest — dismisses it automatically. A summon or a form reduced to 0 HP ends and releases the concentration it was holding; a downed pet stays on your sheet.
+- **Features can hand you things.** Any feature can carry a list of **spells** (added to the Spells tab as always-prepared and tagged with the feature that granted them) and **creature statblocks** (one tap to summon onto the Allies tab). Deleting the feature offers to take its grants with it. Useful for oath and domain spells, Find Familiar, Conjure Animals, Wild Shape forms and Pact of the Chain.
+- **HP buttons tally up.** Tapping ± builds a running total you can see — `−7 → 30 HP` — before it lands, then commits after a pause or when you tap Apply. Seven taps is now one damage event with **one** concentration check instead of seven, and the toast carries an ↩ Undo that restores HP, temp HP, death saves and concentration together. Works for allies too.
+- **Conditions follow you.** Active conditions, exhaustion and concentration sit in a strip under the top bar on *every* tab, tappable to inspect or drop. It disappears entirely when you have none.
+- **⭐ Pin a feature** and it moves to a Pinned section above Active and Passive. Any feature can be pinned, not just passive ones, and the pin survives editing and class resync.
+- Expanded cards no longer slam shut when you act on them — pressing a button inside a feature, spell or item keeps it open.
+
 ### New in v1.3 — the sheet now knows the rules it was already tracking
 
 Conditions, exhaustion and armour were recorded but never affected a single number. They do now.
