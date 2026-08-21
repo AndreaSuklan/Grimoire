@@ -298,6 +298,7 @@ const GEAR=[["Abacus","2 gp",2],["Acid (vial)","25 gp",1],["Alchemist's fire (fl
 const EFFECT_GROUPS=[
  ["Ability score",ABILITIES.map(a=>["abl."+a,ABL_NAMES[a]+" score"])],
  ["Saving throws",[["save.all","All saving throws"],...ABILITIES.map(a=>["save."+a,ABL_NAMES[a]+" save"])]],
+ ["Ability checks",[["check.all","All ability checks"],...ABILITIES.map(a=>["check."+a,ABL_NAMES[a]+" checks"])]],
  ["Skills",[["skill.all","All skill checks"],...SKILLS.map(s=>["skill."+s[0],s[1]])]],
  ["Combat",[["ac","Armor Class"],["init","Initiative"],["speed","Speed"],["hpmax","Max HP"],["passive","Passive senses"],
   ["atk.all","All weapon attack rolls"],["atk.melee","Melee attack rolls"],["atk.ranged","Ranged attack rolls"],
@@ -633,7 +634,7 @@ const CONDITION_TEXT={
  Restrained:"Your speed is 0. Attacks against you have advantage; your attacks have disadvantage. Disadvantage on Dexterity saves.",
  Stunned:"Incapacitated; can't move; can barely speak. Auto-fail Strength and Dexterity saves. Attacks against you have advantage.",
  Unconscious:"Incapacitated, prone, unaware; you drop what you're holding. Auto-fail Str/Dex saves. Attacks against you have advantage; hits from within 5 ft are critical hits."};
-const EXHAUSTION_TEXT="2014 — 1: disadvantage on checks · 2: speed halved · 3: disadvantage on attacks & saves · 4: HP max halved · 5: speed 0 · 6: death.\n2024 — each level: −2 to all d20 tests and your DCs; −5 ft speed; 6: death.";
+const EXHAUSTION_TEXT="2014 — 1: disadvantage on ability checks · 2: speed halved · 3: disadvantage on attack rolls & saving throws · 4: hit point maximum halved · 5: speed reduced to 0 · 6: death. These are conditions, not numbers, so Grimoire warns you at roll time instead of changing the total.\n2024 — every d20 test is reduced by 2 per level and your speed by 5 ft per level (6: death). Your DCs are NOT affected. Grimoire applies this automatically — tap any modifier to see it in the breakdown.";
 /* Backgrounds (2014 skill grants + feature name, summarized) */
 const BACKGROUNDS=[
  {name:"Acolyte",skills:["insight","religion"],feature:"Shelter of the Faithful",desc:"Two languages. You command respect at temples of your faith: free healing, care and support from those who share it."},
@@ -695,6 +696,12 @@ const fmt=n=>n>=0?"+"+n:String(n);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const jstr=s=>esc(String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'")); /* safe string for inline JS in attributes */
 function toast(html,ms=2200){const t=$("#toast");t.innerHTML=html;t.classList.add("show");clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove("show"),ms);}
+/* A thrown handler on a phone has no console to inspect — surface it instead of dying silently. */
+function reportError(where,err){
+  try{console.error(where,err);
+    toast('<b>⚠️ Something went wrong</b><div class="dim">'+esc(where)+" — "+esc((err&&err.message)||err)+"</div>",7000);}catch(_){}}
+window.addEventListener("error",e=>reportError("Unexpected error",e.error||e.message));
+window.addEventListener("unhandledrejection",e=>reportError("Background task failed",e.reason));
 /* Dice use crypto.getRandomValues (CSPRNG) with rejection sampling — unbiased,
    far better than Math.random(). Falls back to Math.random() if crypto is missing. */
 const _rndBuf=new Uint32Array(64);let _rndIdx=_rndBuf.length;
@@ -720,33 +727,109 @@ let curTab="main";
 let defsOpen=false; /* Resistances & Immunities toggle on Main */
 let detOpen=false; /* Details & flavour toggle on Main */
 let compOpen=false; /* Companions toggle on Main */
-function save(){localStorage.setItem(STORE_KEY,JSON.stringify(db));}
+let _saveFailed=false;
+function save(){
+  try{localStorage.setItem(STORE_KEY,JSON.stringify(db));_saveFailed=false;}
+  catch(e){ /* quota exceeded / private mode: characters are the player's session — never fail silently */
+    console.error("save failed",e);
+    if(!_saveFailed){_saveFailed=true;
+      try{toast("⚠️ Could not save — device storage is full or blocked.<div class=\"dim\">Export your character (⋮ → Export JSON) before closing the app.</div>",9000);}catch(_){}}}}
 function load(){try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&d.characters)db=d;}catch(e){}
   if(!db.customSubs)db.customSubs=[];
   if(!db.customRaces)db.customRaces=[];
   if(!db.customFeats)db.customFeats=[];
   if(!db.rollLog)db.rollLog=[];
   db.characters.forEach(migrate);}
-function migrate(c){ /* upgrade older saves in place */
-  if(!c.edition)c.edition="2014";
-  if(!c.acMode)c.acMode="manual";
-  if(!c.defenses)c.defenses={dmg:{},condimm:[],custom:[]};
-  if(!c.defenses.custom)c.defenses.custom=[];
-  if(!c.details)c.details={size:"Medium",height:"",weight:"",age:"",eyes:"",hair:"",skin:"",flavor:""};
-  if(!c.activeBuffs)c.activeBuffs=[];
-  if(!c.customBuffs)c.customBuffs=[];
+const SCHEMA_VERSION=2;
+const _arr=(v,d)=>Array.isArray(v)?v:d;
+const _obj=(v,d)=>(v&&typeof v==="object"&&!Array.isArray(v))?v:d;
+function migrate(c){ /* upgrade older saves in place — must survive partial, old or hand-edited JSON */
+  c.id=c.id||uid();
+  c.name=(typeof c.name==="string"&&c.name.trim())?c.name:"Unnamed";
+  if(c.edition!=="2024")c.edition="2014";
+  if(c.acMode!=="auto")c.acMode="manual";
+  /* classes */
+  c.classes=_arr(c.classes,[]).filter(k=>k&&k.name);
+  if(!c.classes.length)c.classes=[{name:"Fighter",subclass:"",level:1}];
+  c.classes.forEach(k=>{k.subclass=k.subclass||"";k.level=Math.min(20,Math.max(1,+k.level||1));});
+  /* core numbers */
+  c.abilities=_obj(c.abilities,{});
+  ABILITIES.forEach(a=>c.abilities[a]=Math.max(1,Math.min(30,+c.abilities[a]||10)));
+  c.saveProf=_obj(c.saveProf,{});
+  ABILITIES.forEach(a=>c.saveProf[a]=!!c.saveProf[a]);
+  c.skills=_obj(c.skills,{});
+  SKILLS.forEach(([k])=>c.skills[k]=[0,1,2].includes(+c.skills[k])?+c.skills[k]:0);
+  c.jack=!!c.jack;
+  c.hp=_obj(c.hp,{});
+  c.hp.max=Math.max(1,+c.hp.max||1);
+  c.hp.current=Number.isFinite(+c.hp.current)?+c.hp.current:c.hp.max;
+  c.hp.temp=Math.max(0,+c.hp.temp||0);
+  c.hitDice=_obj(c.hitDice,{});
+  c.hitDice.die=c.hitDice.die||"d8";
+  c.hitDice.total=Math.max(1,+c.hitDice.total||1);
+  c.hitDice.used=Math.max(0,Math.min(c.hitDice.total,+c.hitDice.used||0));
+  c.deathSaves=_obj(c.deathSaves,{});
+  c.deathSaves.s=Math.max(0,Math.min(3,+c.deathSaves.s||0));
+  c.deathSaves.f=Math.max(0,Math.min(3,+c.deathSaves.f||0));
+  c.ac=+c.ac||10;c.initMisc=+c.initMisc||0;c.speed=+c.speed||30;c.xp=Math.max(0,+c.xp||0);
+  c.inspiration=!!c.inspiration;
+  c.conditions=_arr(c.conditions,[]).filter(x=>CONDITIONS.includes(x));
+  c.exhaustion=Math.max(0,Math.min(6,+c.exhaustion||0));
+  /* defenses — every sub-field, not just the parent: a half-built object used to throw */
+  const d=c.defenses=_obj(c.defenses,{});
+  d.dmg=_obj(d.dmg,{});d.condimm=_arr(d.condimm,[]);d.custom=_arr(d.custom,[]);
+  /* details */
+  c.details=_obj(c.details,{});
+  ["height","weight","age","eyes","hair","skin","flavor"].forEach(k=>c.details[k]=c.details[k]||"");
+  c.details.size=c.details.size||"Medium";
+  /* spellcasting */
+  const sc=c.spellcasting=_obj(c.spellcasting,{});
+  if(!ABILITIES.includes(sc.ability))sc.ability="int";
+  sc.slots=_obj(sc.slots,{});
+  for(let l=1;l<=9;l++){const sl=sc.slots[l]=_obj(sc.slots[l],{});
+    sl.max=Math.max(0,+sl.max||0);sl.used=Math.max(0,Math.min(sl.max,+sl.used||0));}
+  sc.pact=_obj(sc.pact,{});
+  sc.pact.level=Math.max(1,Math.min(5,+sc.pact.level||1));
+  sc.pact.max=Math.max(0,+sc.pact.max||0);
+  sc.pact.used=Math.max(0,Math.min(sc.pact.max,+sc.pact.used||0));
+  sc.spells=_arr(sc.spells,[]).filter(x=>x&&x.name);
+  sc.spells.forEach(x=>x.level=Math.max(0,Math.min(9,+x.level||0)));
+  /* inventory */
+  const inv=c.inventory=_obj(c.inventory,{});
+  inv.items=_arr(inv.items,[]).filter(it=>it&&it.name);
+  inv.currency=_obj(inv.currency,{});
+  ["cp","sp","ep","gp","pp"].forEach(k=>inv.currency[k]=Math.max(0,+inv.currency[k]||0));
+  /* lists */
+  c.attacks=_arr(c.attacks,[]).filter(a=>a&&a.name);
+  c.features=_arr(c.features,[]).filter(f=>f&&f.name);
+  c.profs=_obj(c.profs,{});
+  ["armor","weapons","tools","languages"].forEach(k=>c.profs[k]=c.profs[k]||"");
+  c.notes=typeof c.notes==="string"?c.notes:"";
+  c.activeBuffs=_arr(c.activeBuffs,[]);
+  c.customBuffs=_arr(c.customBuffs,[]).filter(b=>b&&b.name);
   if(c.concentration===undefined)c.concentration=null;
-  if(!c.journal)c.journal=[];
-  if(!c.companions)c.companions=[];
-  if(!c.plan)c.plan={};
-  (c.features||[]).forEach(f=>{
+  c.journal=_arr(c.journal,[]);
+  c.companions=_arr(c.companions,[]).filter(p=>p&&p.name);
+  c.plan=_obj(c.plan,{});
+  c.encVariant=!!c.encVariant;
+  c.color=c.color||AVATAR_COLORS[0];
+  c.updated=+c.updated||Date.now();
+  /* per-entry upgrades */
+  c.features.forEach(f=>{
     if(f.uses&&!f.recharge)f.recharge="long";
-    if(!f.effects){f.effects=autoEffects(f.name,f.desc);}
+    if(!f.effects)f.effects=autoEffects(f.name,f.desc);
     if(f.slotCast===undefined&&detectSlotCast(f.desc))f.slotCast=true;});
-  (c.attacks||[]).forEach(a=>{
+  c.attacks.forEach(a=>{
     if(!a.dmgParts){a.dmgParts=a.damage?[{d:a.damage,t:a.type||""}]:[];delete a.damage;delete a.type;}
     if(!a.kind)a.kind="melee";});
-  ((c.inventory||{}).items||[]).forEach(it=>enrichItem(it,false));}
+  /* Items need a stable id: attacks used to link by name, so the first rename or re-save
+     orphaned the link. Backfill the id and re-point any attack that used the old key. */
+  inv.items.forEach(it=>{
+    if(!it.id){const oldKey=it.name;it.id=uid();
+      c.attacks.forEach(a=>{if(a.itemId===oldKey)a.itemId=it.id;});}
+    enrichItem(it,false);});
+  c.schema=SCHEMA_VERSION;
+  return c;}
 function cur(){return db.characters.find(c=>c.id===db.currentId)||null;}
 
 function newCharacter(){
@@ -773,7 +856,9 @@ function classStr(c){return c.classes.map(k=>k.name+(k.subclass?" ("+k.subclass+
 function skillMod(c,key){const [,,ab]=SKILLS.find(s=>s[0]===key);const p=c.skills[key]||0;
   let b=amod(c,ab)+(p>=1?profBonus(c):0)+(p===2?profBonus(c):0);
   if(p===0&&c.jack)b+=Math.floor(profBonus(c)/2);
-  return b+bonusFor(c,"skill."+key);}
+  /* a skill check IS an ability check, so check.* bonuses (and 2024 exhaustion) apply too */
+  return b+bonusFor(c,"skill."+key)+bonusFor(c,"check."+ab);}
+function ablCheckMod(c,a){return amod(c,a)+bonusFor(c,"check."+a);}
 function saveMod(c,ab){return amod(c,ab)+(c.saveProf[ab]?profBonus(c):0)+bonusFor(c,"save."+ab);}
 function touch(){const c=cur();if(c)c.updated=Date.now();save();}
 
@@ -799,7 +884,40 @@ function activeEffects(c){
   ((c.inventory||{}).items||[]).forEach(it=>{if(itemActive(it))(it.effects||[]).forEach(e=>add(it.name,e));});
   (c.activeBuffs||[]).forEach(bn=>{const b=allBuffs(c).find(x=>x.name===bn);
     if(b)(b.fx||[]).forEach(e=>add("🔆 "+b.name,e));});
+  ruleEffects(c).forEach(e=>out.push(e)); /* rules the app applies for you — same pipeline, so they show in every ⓘ breakdown */
   return out;}
+/* Penalties that come from the rules rather than from a feature or an item. They are pushed
+   through the ordinary effects pipeline so every breakdown popup explains them for free. */
+let _ruleDepth=0;
+function ruleEffects(c){
+  const out=[];
+  /* 2024 exhaustion (PHB 2024): every D20 Test is reduced by 2 per level and Speed by 5 ft per
+     level. DCs are NOT affected. The 2014 ladder is a set of conditions rather than a number,
+     so it is surfaced as a roll-time warning instead — see rollAdvice(). */
+  const ex=Math.max(0,+c.exhaustion||0);
+  if(ex&&c.edition==="2024"){
+    const src="😵 Exhaustion "+ex;
+    out.push({src,t:"check.all",v:-2*ex},{src,t:"save.all",v:-2*ex},{src,t:"atk.all",v:-2*ex},
+             {src,t:"spell.atk",v:-2*ex},{src,t:"init",v:-2*ex},{src,t:"speed",v:-5*ex});}
+  if(_ruleDepth)return out; /* the rules below read derived stats — one level deep is enough */
+  _ruleDepth++;
+  try{
+    const ar=equippedArmor(c);
+    if(ar&&ar.armor&&+ar.armor.strReq>0&&abl(c,"str")<+ar.armor.strReq)
+      out.push({src:ar.name+" (needs Str "+ar.armor.strReq+")",t:"speed",v:-10});
+    if(c.encVariant){const e=encumbrance(c);
+      if(e.level===2)out.push({src:"🎒 Heavily encumbered",t:"speed",v:-20});
+      else if(e.level===1)out.push({src:"🎒 Encumbered",t:"speed",v:-10});}
+  }finally{_ruleDepth--;}
+  return out;}
+/* Carrying capacity & the optional variant thresholds (Str×5 / ×10 / ×15). */
+function encumbrance(c){
+  const heavy=(c.features||[]).some(f=>/powerful build/i.test(f.name||""))?2:1;
+  const st=abl(c,"str")*heavy;
+  const w=((c.inventory||{}).items||[]).reduce((a,it)=>a+(+it.weight||0)*(+it.qty||1),0);
+  return {w,st,cap:st*15,t1:st*5,t2:st*10,level:w>st*10?2:w>st*5?1:0};}
+function armorStealthDis(c){const ar=equippedArmor(c);
+  return (ar&&ar.armor&&ar.armor.stealthDis)?ar.name:null;}
 /* ---- temporary buffs ---- */
 function allBuffs(c){return [...BUFFS,...((c&&c.customBuffs)||[])];}
 function buffOn(c,name){return (c.activeBuffs||[]).includes(name);}
@@ -811,10 +929,54 @@ function toggleBuff(name){const c=cur();
     if(b&&b.conc&&c.concentration===name)c.concentration=null;
     toast("◻️ "+esc(name)+" off");}
   else{
+    if(b&&b.conc&&concentrationBlocked(name))return;
     c.activeBuffs.push(name);
     if(b&&b.conc)setConcentration(name);
     toast("🔆 "+esc(name)+" active"+(b&&b.note?" — "+esc(b.note):""));}
   touch();renderTab();}
+/* What each condition does to YOUR OWN d20 rolls.
+   `dis`/`adv` are listed only where the rule has no "if" clause — those pre-select the pill.
+   `sug` is a conditional rule (Frightened needs the source in sight): warn, never decide. */
+const COND_ROLL={
+ Blinded:{dis:["attack"],note:"you can't see — checks that need sight fail automatically"},
+ Charmed:{note:"you can't attack the charmer or target them with harmful effects"},
+ Deafened:{note:"checks that need hearing fail automatically"},
+ Frightened:{sug:["attack","check"],note:"disadvantage while the source of your fear is in sight"},
+ Grappled:{note:"your speed is 0"},
+ Incapacitated:{note:"you can't take actions or reactions"},
+ Invisible:{adv:["attack"]},
+ Paralyzed:{dis:["attack"],saveFail:["str","dex"],note:"you can't act"},
+ Petrified:{saveFail:["str","dex"],note:"you can't act"},
+ Poisoned:{dis:["attack","check"]},
+ Prone:{dis:["attack"],note:"melee attacks against you have advantage, ranged have disadvantage"},
+ Restrained:{dis:["attack"],saveDis:["dex"],note:"your speed is 0"},
+ Stunned:{dis:["attack"],saveFail:["str","dex"],note:"you can't act"},
+ Unconscious:{dis:["attack"],saveFail:["str","dex"],note:"you can't act"}};
+/* Everything the app knows that should colour this roll but is not a number. */
+function rollAdvice(c,kind,meta){
+  const dis=[],adv=[],notes=[];meta=meta||{};
+  (c.conditions||[]).forEach(cd=>{const r=COND_ROLL[cd];if(!r)return;
+    let said=false;
+    if((r.dis||[]).includes(kind)){dis.push(cd);said=true;}
+    if((r.adv||[]).includes(kind)){adv.push(cd);said=true;}
+    if(kind==="save"&&meta.ab&&(r.saveDis||[]).includes(meta.ab)){dis.push(cd);said=true;}
+    if(kind==="save"&&meta.ab&&(r.saveFail||[]).includes(meta.ab)){
+      notes.push("<b>"+cd+"</b> — this save fails automatically");said=true;}
+    if((r.sug||[]).includes(kind)){notes.push("<b>"+cd+"</b> — "+(r.note||"disadvantage"));said=true;}
+    if(!said&&r.note)notes.push("<b>"+cd+"</b> — "+r.note);});
+  /* 2014 exhaustion is a ladder of conditions, not a modifier — warn, never apply */
+  const ex=Math.max(0,+c.exhaustion||0);
+  if(ex&&c.edition!=="2024"){
+    const l=[];
+    if(kind==="check")l.push("disadvantage on ability checks");
+    if(ex>=3&&kind==="attack")l.push("disadvantage on attack rolls");
+    if(ex>=3&&kind==="save")l.push("disadvantage on saving throws");
+    if(ex>=4)l.push("hit point maximum halved");
+    if(ex>=5)l.push("speed reduced to 0");
+    if(l.length)notes.push("<b>Exhaustion "+ex+"</b> (2014) — "+l.join("; "));}
+  if(meta.skill==="stealth"){const ar=armorStealthDis(c);
+    if(ar)notes.push("<b>"+esc(ar)+"</b> — disadvantage on Stealth checks");}
+  return {dis:[...new Set(dis)],adv:[...new Set(adv)],notes};}
 function rollKind(label){const l=String(label||"").toLowerCase();
   if(/attack/.test(l))return "attack";
   if(/\bsave\b|saving/.test(l))return "save";
@@ -828,11 +990,19 @@ function buffDmgExtras(c){const out=[];
     if(b&&b.dmgDice)out.push({name:b.name,dice:b.dmgDice});});
   return out;}
 /* ---- concentration ---- */
+function concentrationBlocked(name){ /* ask BEFORE spending the slot/use — cancelling must cost nothing */
+  const c=cur();if(!c||!c.concentration||c.concentration===name)return false;
+  return !confirm("Already concentrating on "+c.concentration+". Replace with "+name+"?");}
 function setConcentration(name){const c=cur();
-  if(c.concentration&&c.concentration!==name){
-    if(!confirm("Already concentrating on "+c.concentration+". Replace with "+name+"?"))return false;
-    if(buffOn(c,c.concentration))c.activeBuffs=c.activeBuffs.filter(x=>x!==c.concentration);}
+  if(c.concentration&&c.concentration!==name&&buffOn(c,c.concentration))
+    c.activeBuffs=c.activeBuffs.filter(x=>x!==c.concentration);
   c.concentration=name;touch();return true;}
+function endConcentration(reason){ /* silent version — RAW end, not a player choice */
+  const c=cur();if(!c||!c.concentration)return;
+  const was=c.concentration;
+  if(buffOn(c,was))c.activeBuffs=c.activeBuffs.filter(x=>x!==was);
+  c.concentration=null;touch();
+  toast("🧠 Concentration on "+esc(was)+" ended"+(reason?" — "+esc(reason):""));}
 function dropConcentration(){const c=cur();
   if(c.concentration&&buffOn(c,c.concentration))c.activeBuffs=c.activeBuffs.filter(x=>x!==c.concentration);
   c.concentration=null;touch();renderTab();toast("🧠 Concentration dropped");}
@@ -858,7 +1028,7 @@ function abl(c,a){return c.abilities[a]+bonusFor(c,"abl."+a);}
 function amod(c,a){return mod(abl(c,a));}
 function maxHP(c){return Math.max(1,(+c.hp.max||1)+bonusFor(c,"hpmax"));}
 function initMod(c){return amod(c,"dex")+(+c.initMisc||0)+bonusFor(c,"init");}
-function speedVal(c){return (+c.speed||0)+bonusFor(c,"speed");}
+function speedVal(c){return Math.max(0,(+c.speed||0)+bonusFor(c,"speed"));}
 function spellDC(c){return 8+profBonus(c)+amod(c,c.spellcasting.ability)+bonusFor(c,"spell.dc");}
 function spellAtkMod(c){return profBonus(c)+amod(c,c.spellcasting.ability)+bonusFor(c,"spell.atk");}
 /* ---- AC ---- */
@@ -945,20 +1115,35 @@ function explainModal(title,rows,total,extra){
   openModal(`<h2>${title} ${XBTN}</h2>${fxRows(rows)}
    <div class="skrow" style="border-top:2px solid var(--line)"><div class="nm"><b>Total</b></div><div class="md">${total}</div></div>
    ${extra||""}<p class="dim" style="margin-top:10px">Bonuses come from features, feats and equipped items (Effects section of each). Formulas like <b>prof</b> or <b>cha</b> are calculated automatically.</p>`);}
+function explainCheck(a){const c=cur();
+  const rows=[[ABL_NAMES[a]+" modifier",amod(c,a)]];
+  bonusDetail(c,"check."+a).forEach(b=>rows.push([esc(b.src),b.v]));
+  explainModal(ABL_NAMES[a]+" check",rows,fmt(ablCheckMod(c,a)),
+   `<button class="btn ghost" style="width:100%;margin-top:8px" onclick="closeModal();d20Roll('${ABL_NAMES[a]} check',${ablCheckMod(c,a)},'',{kind:'check',ab:'${a}'})">🎲 Roll</button>`);}
+function checksInfo(){const c=cur();
+  openModal(`<h2>Ability checks ${XBTN}</h2>
+   <p class="dim">The number on each ability box is your <b>ability check</b> modifier. Damage, spell DCs and attack rolls still use the plain ability modifier — they differ when something (like 2024 exhaustion) penalises checks only.</p>
+   ${ABILITIES.map(a=>`<div class="skrow">
+     <div class="nm" onclick="closeModal();explainCheck('${a}')" style="cursor:pointer">${ABL_NAMES[a]}${bonusDetail(c,"check."+a).length?' <span style="color:var(--gold)">✦</span>':""}
+       ${ablCheckMod(c,a)!==amod(c,a)?`<div class="li-sub" style="display:block">plain modifier ${fmt(amod(c,a))}</div>`:""}</div>
+     <div class="md" onclick="closeModal();d20Roll('${ABL_NAMES[a]} check',${ablCheckMod(c,a)},'',{kind:'check',ab:'${a}'})">${fmt(ablCheckMod(c,a))}</div></div>`).join("")}`);}
 function explainSave(a){const c=cur();
   const rows=[[ABL_NAMES[a]+" modifier",amod(c,a)]];
   if(c.saveProf[a])rows.push(["Proficiency",profBonus(c)]);
   bonusDetail(c,"save."+a).forEach(b=>rows.push([esc(b.src),b.v]));
   explainModal(ABL_NAMES[a]+" save",rows,fmt(saveMod(c,a)),
-   `<button class="btn ghost" style="width:100%;margin-top:8px" onclick="closeModal();d20Roll('${ABL_NAMES[a]} save',${saveMod(c,a)})">🎲 Roll</button>`);}
+   `<button class="btn ghost" style="width:100%;margin-top:8px" onclick="closeModal();d20Roll('${ABL_NAMES[a]} save',${saveMod(c,a)},'',{kind:'save',ab:'${a}'})">🎲 Roll</button>`);}
 function explainSkill(k){const c=cur();const [,nm,ab]=SKILLS.find(s=>s[0]===k);const p=c.skills[k]||0;
   const rows=[[ABL_NAMES[ab]+" modifier",amod(c,ab)]];
   if(p>=1)rows.push(["Proficiency",profBonus(c)]);
   if(p===2)rows.push(["Expertise",profBonus(c)]);
   if(p===0&&c.jack)rows.push(["Jack of All Trades",Math.floor(profBonus(c)/2)]);
   bonusDetail(c,"skill."+k).forEach(b=>rows.push([esc(b.src),b.v]));
+  bonusDetail(c,"check."+ab).forEach(b=>rows.push([esc(b.src),b.v]));
+  const sd=k==="stealth"?armorStealthDis(c):null;
   explainModal(nm,rows,fmt(skillMod(c,k)),
-   `<button class="btn ghost" style="width:100%;margin-top:8px" onclick="closeModal();d20Roll('${jstr(nm)}',${skillMod(c,k)})">🎲 Roll</button>`);}
+   `${sd?`<p class="warn" style="margin-top:8px">🔻 ${esc(sd)} imposes disadvantage on Stealth checks.</p>`:""}
+    <button class="btn ghost" style="width:100%;margin-top:8px" onclick="closeModal();d20Roll('${jstr(nm)}',${skillMod(c,k)},'',{kind:'check',ab:'${ab}',skill:'${k}'})">🎲 Roll</button>`);}
 function explainAC(){const c=cur();const b=acBreakdown(c);
   explainModal("Armor Class",b.rows,b.total,`
    <div class="row" style="margin-top:10px">
@@ -1029,10 +1214,21 @@ function setTab(tab){curTab=tab;
   $("#scr-"+tab).classList.add("active");
   $$("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
   renderTab();window.scrollTo(0,0);}
-function renderTab(){const c=cur();if(!c)return;
-  $("#tbName").textContent=c.name;
-  $("#tbSub").textContent=classStr(c)+" · Lv "+totalLevel(c)+" · PB "+fmt(profBonus(c));
-  ({main:renderMain,skills:renderSkills,spells:renderSpells,inv:renderInv,feat:renderFeat})[curTab]();}
+function renderTab(){const c=cur();if(!c){showList();return;}
+  try{
+    $("#tbName").textContent=c.name;
+    $("#tbSub").textContent=classStr(c)+" · Lv "+totalLevel(c)+" · PB "+fmt(profBonus(c));
+    const fn=({main:renderMain,skills:renderSkills,spells:renderSpells,inv:renderInv,feat:renderFeat})[curTab];
+    if(!fn){curTab="main";renderMain();return;}
+    fn();
+  }catch(err){ /* one bad field must not leave a blank tab with no way back */
+    reportError("Drawing the "+curTab+" tab",err);
+    const el=$("#scr-"+curTab);
+    if(el)el.innerHTML='<div class="card"><h2>⚠️ This tab could not be drawn</h2>'
+      +'<p class="dim">'+esc((err&&err.message)||String(err))+'</p>'
+      +'<p class="dim">Your data is safe on the device. Export it (⋮ → Export JSON) before making changes.</p>'
+      +'<div class="row"><button class="btn ghost" onclick="renderTab()">Try again</button>'
+      +'<button class="btn ghost" onclick="showList()">👥 All characters</button></div></div>';}}
 $$("#nav button").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
 $("#btnBack").onclick=showList;
 
@@ -1050,32 +1246,52 @@ function bigHtml(n){ /* total display; 14 gets fireworks 🎆 */
   return `<div class="big fw14">✨14✨${sp}</div>`;}
 function logRoll(label,total,detail){
   if(!db.rollLog)db.rollLog=[];
-  db.rollLog.unshift({ts:Date.now(),label:String(label||""),total,detail:detail||""});
+  const entry={ts:Date.now(),label:String(label||""),total,detail:detail||""};
+  db.rollLog.unshift(entry);
   if(db.rollLog.length>60)db.rollLog.length=60;
-  save();}
+  save();return entry;}
+function relogRoll(entry,total,detail){ /* the d20 toast lets you switch adv/dis after the roll — keep history truthful */
+  if(!entry)return;
+  entry.total=total;if(detail!==undefined)entry.detail=detail;save();}
 let lastRoll=null;
-function d20Roll(label,modifier,note){
+function d20Roll(label,modifier,note,meta){
   const r1=rollDie(20),r2=rollDie(20);
   let extra=0,extraTxt=[];
   const c=cur();
-  if(c)buffD20Extras(c,rollKind(label)).forEach(b=>{const r=rollExpr(b.dice);
+  meta=meta||{};
+  const kind=meta.kind||rollKind(label);
+  if(c)buffD20Extras(c,kind).forEach(b=>{const r=rollExpr(b.dice);
     if(r){extra+=r.total;extraTxt.push(esc(b.name)+" "+esc(b.dice)+" ["+(r.total>=0?"+":"")+r.total+"]");}});
-  lastRoll={label,modifier,r1,r2,note:note||"",extra,extraTxt:extraTxt.join(" · ")};
-  logRoll(label,r1+modifier+extra);
-  showRoll("normal");}
+  const advice=c?rollAdvice(c,kind,meta):{dis:[],adv:[],notes:[]};
+  /* advantage and disadvantage cancel out to a straight roll (PHB) */
+  const start=(advice.dis.length&&advice.adv.length)?"normal"
+    :advice.dis.length?"dis":advice.adv.length?"adv":"normal";
+  lastRoll={label,modifier,r1,r2,note:note||"",extra,extraTxt:extraTxt.join(" · "),advice};
+  lastRoll.entry=logRoll(label,r1+modifier+extra,"d20 "+r1+" "+fmt(modifier));
+  showRoll(start);}
 function showRoll(adv){
   const {label,modifier,r1,r2,note,extra,extraTxt}=lastRoll;
+  const advice=lastRoll.advice||{dis:[],adv:[],notes:[]};
   let use=r1;if(adv==="adv")use=Math.max(r1,r2);if(adv==="dis")use=Math.min(r1,r2);
+  relogRoll(lastRoll.entry,use+modifier+(extra||0),
+    (adv==="adv"?"adv ":adv==="dis"?"dis ":"")+"d20 "+(adv==="normal"?use:r1+"/"+r2)+" "+fmt(modifier)+(extra?" "+fmt(extra):""));
   const crit=use===20?' <span class="good">CRIT!</span>':use===1?' <span class="warn">Nat 1</span>':"";
+  const why=[];
+  if(advice.dis.length&&advice.adv.length)
+    why.push('<span class="dim">'+advice.adv.join(", ")+" vs "+advice.dis.join(", ")+" — they cancel, roll straight</span>");
+  else if(advice.dis.length)why.push('<span class="warn">🔻 Disadvantage: '+advice.dis.join(", ")+"</span>");
+  else if(advice.adv.length)why.push('<span class="good">🔺 Advantage: '+advice.adv.join(", ")+"</span>");
+  advice.notes.forEach(n=>why.push('<span class="dim">⚠️ '+n+"</span>"));
   toast(`<div><b>${esc(label)}</b>${crit}</div>${bigHtml(use+modifier+(extra||0))}
     <div class="dim">d20: ${adv==="normal"?use:r1+" / "+r2} ${fmt(modifier)}</div>
     ${extraTxt?`<div class="dim">🔆 ${extraTxt}</div>`:""}
     ${note?`<div class="dim">${note}</div>`:""}
+    ${why.length?`<div style="font-size:13px;margin-top:4px">${why.join("<br>")}</div>`:""}
     <div class="dice-adv">
       <button class="pill ${adv==="normal"?"on":""}" onclick="showRoll('normal')">Normal</button>
       <button class="pill ${adv==="adv"?"on":""}" onclick="showRoll('adv')">Advantage</button>
       <button class="pill ${adv==="dis"?"on":""}" onclick="showRoll('dis')">Disadv.</button>
-    </div>`,6000);}
+    </div>`,why.length?9000:6000);}
 function damageRoll(label,expr){const r=rollExpr(expr);
   if(!r){toast("Can't parse dice: "+esc(expr));return;}
   logRoll(label,r.total,r.detail);
@@ -1089,7 +1305,7 @@ $("#btnDice").onclick=()=>{
     <button class="btn" style="flex:none" onclick="damageRoll('Custom',$('#diceExpr').value)">Roll</button></div>
     ${log.length?`<hr><div class="section-head"><h3>Roll history</h3>
       <button class="pill" onclick="db.rollLog=[];save();closeModal()">Clear</button></div>
-    ${log.map(r=>`<div class="skrow"><div class="nm" style="font-size:13px">${esc(r.label)}<span class="dim"> · ${new Date(r.ts).toTimeString().slice(0,5)}</span></div>
+    ${log.map(r=>`<div class="skrow"><div class="nm" style="font-size:13px">${esc(r.label)}<span class="dim"> · ${new Date(r.ts).toTimeString().slice(0,5)}${r.detail?" · "+esc(r.detail):""}</span></div>
       <div class="md" style="cursor:default">${r.total}</div></div>`).join("")}`:""}`);};
 
 /* ================== CHARACTER LIST ================== */
@@ -1106,14 +1322,14 @@ function renderList(){
       <button class="iconbtn" onclick="event.stopPropagation();charMenu('${c.id}')">⋮</button>
     </div>`).join("");}
   renderSrdStatus();}
-function charMenu(id){const c=db.characters.find(x=>x.id===id);
+function charMenu(id){const c=db.characters.find(x=>x.id===id);if(!c)return;
   openModal(`<h2>${esc(c.name)} ${XBTN}</h2>
     <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="exportChar('${id}')">📤 Export JSON</button>
     <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="duplicateChar('${id}')">📄 Duplicate</button>
     <button class="btn danger" style="width:100%" onclick="deleteChar('${id}')">🗑️ Delete</button>`);}
 function deleteChar(id){if(!confirm("Delete this character permanently?"))return;
   db.characters=db.characters.filter(c=>c.id!==id);save();closeModal();renderList();}
-function duplicateChar(id){const c=db.characters.find(x=>x.id===id);
+function duplicateChar(id){const c=db.characters.find(x=>x.id===id);if(!c)return;
   const copy=JSON.parse(JSON.stringify(c));copy.id=uid();copy.name=c.name+" (copy)";copy.updated=Date.now();
   db.characters.push(copy);save();closeModal();renderList();}
 function printSheet(){const c=cur();if(!c)return;
@@ -1161,7 +1377,7 @@ function printSheet(){const c=cur();if(!c)return;
    <br><button onclick="window.print()" style="font-size:16px;padding:8px 20px">🖨️ Print / Save as PDF</button>
    </body></html>`);
   w.document.close();closeModal();}
-function exportChar(id){const c=db.characters.find(x=>x.id===id);
+function exportChar(id){const c=db.characters.find(x=>x.id===id);if(!c)return;
   const blob=new Blob([JSON.stringify(c,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download=(c.name||"character").replace(/\W+/g,"_")+".json";a.click();closeModal();}
@@ -1289,7 +1505,7 @@ function newCharWizard(){
    <label>Name</label><input id="nw_name" placeholder="e.g. Kass Shadowstep"><div class="spacer"></div>
    <div class="grid2">
     <div><label>Race / species</label><input id="nw_race" list="raceList" placeholder="pick or type any">
-     <datalist id="raceList">${[...RACES,...(db.customRaces||[])].map(r=>`<option value="${esc(r.name)}">`).join("")}</datalist></div>
+     <datalist id="raceList">${allRaces().map(r=>`<option value="${esc(r.name)}">`).join("")}</datalist></div>
     <div><label>Background</label><input id="nw_bg" list="bgList" placeholder="pick or type any">
      <datalist id="bgList">${BACKGROUNDS.map(b=>`<option value="${esc(b.name)}">`).join("")}</datalist></div></div>
    <p class="dim" style="margin:4px 0 0">Known races & backgrounds auto-apply ability increases, speed, skills and traits (with prompts for choices). Anything else is fine too — just no automation.</p>
@@ -1360,7 +1576,7 @@ $("#fileImport").onchange=e=>{const f=e.target.files[0];if(!f)return;
     const c=JSON.parse(rd.result);if(!c.name||!c.abilities)throw 0;
     c.id=uid();c.updated=Date.now();migrate(c);db.characters.push(c);save();renderList();toast("Imported "+esc(c.name));
   }catch(err){toast("Invalid character file");}};rd.readAsText(f);e.target.value="";};
-$("#btnMenu").onclick=()=>{const c=cur();
+$("#btnMenu").onclick=()=>{const c=cur();if(!c){showList();return;}
   openModal(`<h2>${esc(c.name)} ${XBTN}</h2>
     <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();editIdentity()">✏️ Edit character & classes</button>
     <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();plannerModal()">🗺️ Level-up planner</button>
@@ -1375,7 +1591,7 @@ function editIdentity(){const c=cur();
   openModal(`<h2>Edit character ${XBTN}</h2>
    <label>Name</label><input id="edName" value="${esc(c.name)}"><div class="spacer"></div>
    <div class="grid2"><div><label>Race / species</label><input id="edRace" value="${esc(c.race)}" list="raceList">
-   <datalist id="raceList">${RACES.map(r=>`<option value="${esc(r.name)}">`).join("")}</datalist></div>
+   <datalist id="raceList">${allRaces().map(r=>`<option value="${esc(r.name)}">`).join("")}</datalist></div>
    <div><label>Background</label><input id="edBg" value="${esc(c.background)}" list="bgList">
    <datalist id="bgList">${BACKGROUNDS.map(b=>`<option value="${esc(b.name)}">`).join("")}</datalist></div></div><div class="spacer"></div>
    <div class="grid2"><div><label>Alignment</label><input id="edAlign" value="${esc(c.alignment)}"></div>
@@ -1425,11 +1641,11 @@ function renderMain(){const c=cur();const pb=profBonus(c);
   $("#scr-main").innerHTML=`
   <div class="card">
     <div class="abl-grid">${ABILITIES.map(a=>{const eff=abl(c,a);return `
-      <div class="abl" onclick="d20Roll('${ABL_NAMES[a]} check',${amod(c,a)})" oncontextmenu="event.preventDefault();editAbility('${a}')">
-        <div class="a-name">${a}</div><div class="a-mod">${fmt(amod(c,a))}</div>
-        <div class="a-score">${eff}${eff!==c.abilities[a]?`<span style="color:var(--gold)" title="base ${c.abilities[a]} + bonuses">*</span>`:""}</div></div>`;}).join("")}
+      <div class="abl" onclick="d20Roll('${ABL_NAMES[a]} check',${ablCheckMod(c,a)},'',{kind:'check',ab:'${a}'})" oncontextmenu="event.preventDefault();explainCheck('${a}')">
+        <div class="a-name">${a}</div><div class="a-mod">${fmt(ablCheckMod(c,a))}</div>
+        <div class="a-score">${eff}${eff!==c.abilities[a]?`<span style="color:var(--gold)" title="base ${c.abilities[a]} + bonuses">*</span>`:""}${ablCheckMod(c,a)!==amod(c,a)?` <span style="color:var(--gold)" title="The big number is your ${ABL_NAMES[a]} CHECK modifier (what tapping rolls). Your plain ${ABL_NAMES[a]} modifier — used for damage, spell DCs and attacks — is still ${fmt(amod(c,a))}.">(${fmt(amod(c,a))})</span>`:""}</div></div>`;}).join("")}
     </div>
-    <div class="dim center" style="margin-top:8px">Tap to roll · <button class="pill" onclick="editAbilities()">Edit scores</button></div>
+    <div class="dim center" style="margin-top:8px">Tap to roll an ability check${ABILITIES.some(a=>ablCheckMod(c,a)!==amod(c,a))?' · <span style="color:var(--gold)">(+n)</span> = plain modifier, still used for damage & DCs':""} · <button class="pill" onclick="checksInfo()">ⓘ Breakdown</button> <button class="pill" onclick="editAbilities()">Edit scores</button></div>
   </div>
 
   <div class="card">
@@ -1468,7 +1684,7 @@ function renderMain(){const c=cur();const pb=profBonus(c);
     ${c.hp.current<=0?`<hr><div class="row" style="align-items:center">
       <div><div class="dim">Death saves — successes</div><div class="death-dots">${[1,2,3].map(i=>`<div class="ddot ${c.deathSaves.s>=i?"s":""}" onclick="setDeath('s',${i})"></div>`).join("")}</div></div>
       <div><div class="dim">failures</div><div class="death-dots">${[1,2,3].map(i=>`<div class="ddot ${c.deathSaves.f>=i?"f":""}" onclick="setDeath('f',${i})"></div>`).join("")}</div></div>
-      <button class="btn ghost small" style="flex:none" onclick="d20Roll('Death save',0)">🎲</button></div>`:""}
+      <button class="btn ghost small" style="flex:none" onclick="rollDeathSave()">🎲</button></div>`:""}
   </div>
 
   <div class="card">
@@ -1484,8 +1700,12 @@ function renderMain(){const c=cur();const pb=profBonus(c);
 
   <div class="card">
     <div class="section-head"><h2 style="margin:0">Conditions <span onclick="conditionsInfo()" style="cursor:pointer;font-size:14px">ⓘ</span></h2>
-      <span class="dim">Exhaustion <select style="width:auto;padding:4px 8px" onchange="cur().exhaustion=+this.value;touch()">${[0,1,2,3,4,5,6].map(x=>`<option ${c.exhaustion===x?"selected":""}>${x}</option>`).join("")}</select></span></div>
+      <span class="dim">Exhaustion <select style="width:auto;padding:4px 8px" onchange="cur().exhaustion=+this.value;touch();renderTab()">${[0,1,2,3,4,5,6].map(x=>`<option ${c.exhaustion===x?"selected":""}>${x}</option>`).join("")}</select></span></div>
     <div class="cond-grid">${CONDITIONS.map(cd=>`<button class="pill ${c.conditions.includes(cd)?"on":""}" onclick="toggleCondition('${cd}')">${cd}</button>`).join("")}</div>
+    ${c.exhaustion?`<div class="dim" style="margin-top:8px">${c.edition==="2024"
+      ? `😵 <b>Exhaustion ${c.exhaustion}</b> — applied automatically: ${fmt(-2*c.exhaustion)} to every d20 test, ${fmt(-5*c.exhaustion)} ft speed.${c.exhaustion>=6?' <span class="warn">Level 6 is death.</span>':""}`
+      : `😵 <b>Exhaustion ${c.exhaustion}</b> (2014) — a ladder of conditions, so it is not added to your totals. You'll be warned when you roll: ${[c.exhaustion>=1?"disadvantage on ability checks":"",c.exhaustion>=2?"speed halved":"",c.exhaustion>=3?"disadvantage on attacks & saves":"",c.exhaustion>=4?"HP maximum halved":"",c.exhaustion>=5?"speed 0":"",c.exhaustion>=6?"death":""].filter(Boolean).join(" · ")}`}</div>`:""}
+    ${(c.conditions||[]).length?`<div class="dim" style="margin-top:6px">Active conditions colour your rolls automatically — tap ⓘ above for what each one does.</div>`:""}
   </div>
 
   <div class="card">
@@ -1649,22 +1869,61 @@ function editAbility(a){editAbilities();}
 function saveAbilities(){const c=cur();ABILITIES.forEach(a=>c.abilities[a]=Math.max(1,Math.min(30,+$("#ab_"+a).value||10)));touch();closeModal();renderTab();}
 function editStat(which){which==="ac"?explainAC():explainSpeed();}
 function toggleInspiration(){const c=cur();c.inspiration=!c.inspiration;touch();renderTab();if(c.inspiration)toast("⭐ Inspiration gained!");}
-function hpDelta(d){const c=cur();
-  if(d<0&&c.hp.temp>0){c.hp.temp--;}
-  else{c.hp.current=Math.max(0,Math.min(maxHP(c),c.hp.current+d));}
-  if(c.hp.current>0){c.deathSaves={s:0,f:0};}
-  touch();renderTab();}
-function hpPrompt(sign){const v=prompt(sign<0?"Damage taken":"Healing received");if(v===null)return;
-  let n=Math.abs(+v||0);const c=cur();const raw=n;
-  if(sign<0){const absorbed=Math.min(c.hp.temp,n);c.hp.temp-=absorbed;n-=absorbed;
-    c.hp.current=Math.max(0,c.hp.current-n);}
-  else{c.hp.current=Math.min(maxHP(c),c.hp.current+n);c.deathSaves={s:0,f:0};}
+/* Single damage/healing path — the ± buttons and the Damage…/Heal… prompts must behave identically. */
+function applyDamage(n){const c=cur();if(!c)return;
+  n=Math.max(0,Math.floor(+n||0));if(!n)return;
+  const absorbed=Math.min(+c.hp.temp||0,n);
+  c.hp.temp=(+c.hp.temp||0)-absorbed;
+  c.hp.current=Math.max(0,c.hp.current-(n-absorbed));
   touch();renderTab();
-  if(sign<0&&raw>0&&c.concentration)concCheckModal(raw);}
+  if(c.hp.current<=0){ /* unconscious: concentration ends outright, no save */
+    if(c.concentration)endConcentration("you dropped to 0 HP");
+    dropConcentrationBuffs();}
+  else if(c.concentration)concCheckModal(n);}
+function dropConcentrationBuffs(){const c=cur();if(!c||!(c.activeBuffs||[]).length)return;
+  const keep=c.activeBuffs.filter(bn=>{const b=allBuffs(c).find(x=>x.name===bn);return !(b&&b.conc);});
+  if(keep.length!==c.activeBuffs.length){c.activeBuffs=keep;touch();renderTab();}}
+function applyHealing(n){const c=cur();if(!c)return;
+  n=Math.max(0,Math.floor(+n||0));if(!n)return;
+  const was=c.hp.current;
+  c.hp.current=Math.min(maxHP(c),c.hp.current+n);
+  if(was<=0&&c.hp.current>0)c.deathSaves={s:0,f:0};
+  touch();renderTab();}
+function hpDelta(d){d<0?applyDamage(-d):applyHealing(d);}
+function hpPrompt(sign){const v=prompt(sign<0?"Damage taken":"Healing received");if(v===null)return;
+  const n=Math.abs(+v||0);
+  sign<0?applyDamage(n):applyHealing(n);}
 function tempHpPrompt(){const v=prompt("Temporary HP");if(v===null)return;cur().hp.temp=Math.max(0,+v||0);touch();renderTab();}
 function editHp(){explainHP();}
 function setDeath(k,i){const c=cur();c.deathSaves[k]=c.deathSaves[k]===i?i-1:i;touch();renderTab();
   if(c.deathSaves.s>=3)toast("💚 Stabilized!");if(c.deathSaves.f>=3)toast("💀 Character has died…");}
+/* Death saves: the app rolls and reads the result, but you tap to record it —
+   the dots stay yours to correct. */
+function deathSavePenalty(c){return c.edition==="2024"?-2*Math.max(0,+c.exhaustion||0):0;}
+function rollDeathSave(){const c=cur();if(!c)return;
+  const pen=deathSavePenalty(c);
+  const r=rollDie(20),total=r+pen;
+  let outcome,act;
+  if(r===20){outcome='<span class="good">Natural 20 — you regain 1 hit point and are conscious.</span>';act="revive";}
+  else if(r===1){outcome='<span class="warn">Natural 1 — that counts as two failures.</span>';act="fail2";}
+  else if(total>=10){outcome='<span class="good">Success</span> (DC 10).';act="succ";}
+  else{outcome='<span class="warn">Failure</span> (DC 10).';act="fail";}
+  logRoll("Death save",total,"d20 "+r+(pen?" "+fmt(pen):""));
+  toast(`<div><b>Death save</b></div>${bigHtml(total)}
+    <div class="dim">d20: ${r}${pen?" "+fmt(pen)+" (exhaustion)":""} · DC 10</div>
+    <div style="margin-top:4px">${outcome}</div>
+    <div class="dice-adv"><button class="pill on" onclick="applyDeathSave('${act}')">Record it</button>
+      <button class="pill" onclick="toast('Not recorded')">Ignore</button></div>`,9000);}
+function applyDeathSave(act){const c=cur();if(!c)return;
+  if(act==="revive"){c.deathSaves={s:0,f:0};c.hp.current=Math.max(1,c.hp.current);touch();renderTab();
+    toast("💚 Back on your feet with 1 HP");return;}
+  if(act==="succ")c.deathSaves.s=Math.min(3,c.deathSaves.s+1);
+  if(act==="fail")c.deathSaves.f=Math.min(3,c.deathSaves.f+1);
+  if(act==="fail2")c.deathSaves.f=Math.min(3,c.deathSaves.f+2);
+  touch();renderTab();
+  if(c.deathSaves.s>=3)toast("💚 Stabilised — you stop dying (still unconscious at 0 HP).",5000);
+  else if(c.deathSaves.f>=3)toast("💀 Three failures — your character has died.",6000);
+  else toast("Death saves: "+c.deathSaves.s+" ✅ / "+c.deathSaves.f+" ❌");}
 function toggleCondition(cd){const c=cur();
   c.conditions.includes(cd)?c.conditions=c.conditions.filter(x=>x!==cd):c.conditions.push(cd);
   touch();renderTab();}
@@ -1720,9 +1979,14 @@ function grantedCustomDefs(c){ /* from item/feature effects like custom.resist w
     if(m&&e.v)out.push({s:m[1],t:String(e.v),src:e.src});});
   return out;}
 function defCount(c){const d=c.defenses||{dmg:{},condimm:[],custom:[]};
-  const g=grantedDefs(c),gc=grantedCondImm(c),gx=grantedCustomDefs(c);
-  return Object.keys(d.dmg).length+(d.custom||[]).length+(d.condimm||[]).length
-    +new Set(g.map(x=>x.s+x.t)).size+new Set(gc.map(x=>x.t)).size+new Set(gx.map(x=>x.s+x.t)).size;}
+  /* dedupe against granted entries so the badge matches the list defSummary draws */
+  const dmg=new Set(Object.keys(d.dmg||{}).map(t=>d.dmg[t]+"|"+t));
+  grantedDefs(c).forEach(x=>dmg.add(x.s+"|"+x.t));
+  const ci=new Set(d.condimm||[]);
+  grantedCondImm(c).forEach(x=>ci.add(x.t));
+  const cust=new Set((d.custom||[]).map(x=>x.s+"|"+x.t));
+  grantedCustomDefs(c).forEach(x=>cust.add(x.s+"|"+x.t));
+  return dmg.size+ci.size+cust.size;}
 function defSummary(c){const d=c.defenses||{dmg:{},condimm:[],custom:[]};
   const g=grantedDefs(c);
   const rows=[];
@@ -1845,7 +2109,7 @@ function renderSkills(){const c=cur();const pb=profBonus(c);
     ${ABILITIES.map(a=>`<div class="skrow">
       <div class="prof ${c.saveProf[a]?"p1":""}" onclick="toggleSaveProf('${a}')"></div>
       <div class="nm" onclick="explainSave('${a}')" style="cursor:pointer">${ABL_NAMES[a]}${hasFx("save."+a)}</div>
-      <div class="md" onclick="d20Roll('${ABL_NAMES[a]} save',${saveMod(c,a)})">${fmt(saveMod(c,a))}</div></div>`).join("")}
+      <div class="md" onclick="d20Roll('${ABL_NAMES[a]} save',${saveMod(c,a)},'',{kind:'save',ab:'${a}'})">${fmt(saveMod(c,a))}</div></div>`).join("")}
   </div>
   <div class="card">
     <div class="section-head"><h2 style="margin:0">Skills</h2>
@@ -1854,8 +2118,8 @@ function renderSkills(){const c=cur();const pb=profBonus(c);
     <div class="dim" style="margin-bottom:6px">Circle: empty = none · purple = proficient · gold = expertise. Tap name for breakdown, modifier to roll. ✦ = bonus from a feature/item.</div>
     ${SKILLS.map(([k,n,ab])=>`<div class="skrow">
       <div class="prof ${c.skills[k]===1?"p1":c.skills[k]===2?"p2":""}" onclick="cycleSkill('${k}')"></div>
-      <div class="nm" onclick="explainSkill('${k}')" style="cursor:pointer">${n}${hasFx("skill."+k)}</div><div class="ab">${ab}</div>
-      <div class="md" onclick="d20Roll('${n}',${skillMod(c,k)})">${fmt(skillMod(c,k))}</div></div>`).join("")}
+      <div class="nm" onclick="explainSkill('${k}')" style="cursor:pointer">${n}${hasFx("skill."+k)}${hasFx("check."+ab)}${k==="stealth"&&armorStealthDis(c)?`<span class="tag" style="color:var(--red);border-color:var(--red)" title="${esc(armorStealthDis(c))} imposes disadvantage on Stealth">🔻 armour</span>`:""}</div><div class="ab">${ab}</div>
+      <div class="md" onclick="d20Roll('${n}',${skillMod(c,k)},'',{kind:'check',ab:'${ab}',skill:'${k}'})">${fmt(skillMod(c,k))}</div></div>`).join("")}
     <hr><div class="row"><div class="statbox" style="flex:1"><div class="v">${passive}</div><div class="l">Passive Perception</div></div>
     <div class="statbox" style="flex:1"><div class="v">${10+skillMod(c,"investigation")+pasB}</div><div class="l">Passive Investigation</div></div>
     <div class="statbox" style="flex:1"><div class="v">${10+skillMod(c,"insight")+pasB}</div><div class="l">Passive Insight</div></div></div>
@@ -1928,12 +2192,12 @@ function renderSpells(){const c=cur();const sc=c.spellcasting;const pb=profBonus
     <div class="section-head"><h2 style="margin:0">Spells</h2><div>
       <button class="pill" onclick="openSpellBrowser()">📖 SRD</button>
       <button class="pill" onclick="editCustomSpell(-1)">＋ Custom</button></div></div>
-    ${capInfo?`<div class="dim" style="margin-bottom:6px">${capInfo}</div>`:""}
+    <div class="dim" id="prepInfo" style="margin-bottom:${capInfo?"6px":"0"}">${capInfo}</div>
     ${sc.spells.length?levels.map(lv=>`
       <div class="dim" style="margin:10px 0 6px;font-weight:700">${lv===0?"CANTRIPS":"LEVEL "+lv}</div>
       ${grouped[lv].map(([s,i])=>`<div class="li" id="sp_${i}">
         <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-          ${lv>0&&!s.always&&!s.fromItem?`<input type="checkbox" ${s.prepared?"checked":""} onclick="event.stopPropagation()" onchange="cur().spellcasting.spells[${i}].prepared=this.checked;touch()" title="Prepared">`:""}
+          ${lv>0&&!s.always&&!s.fromItem?`<input type="checkbox" ${s.prepared?"checked":""} onclick="event.stopPropagation()" onchange="setPrepared(${i},this.checked)" title="Prepared">`:""}
           <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}${s.always?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">always</span>':""}${s.fromItem?`<span class="tag c">🎁 ${esc(s.fromItem)}</span>`:""}
             <div class="li-sub">${esc(s.time||"")}${s.range?" · "+esc(s.range):""}${s.uses?` · ${s.usesLeft??s.uses}/${s.uses} uses ${s.recharge==="dawn"?"🌅":s.recharge==="short"?"🌙":"☀️"}`:""}</div></div>
           ${s.uses?`<button class="btn small" onclick="event.stopPropagation();castItemSpell(${i})">Cast</button>`
@@ -1945,9 +2209,13 @@ function renderSpells(){const c=cur();const sc=c.spellcasting;const pb=profBonus
           ${s.higher?`<p><b>At higher levels.</b> ${esc(s.higher)}</p>`:""}</div>
       </div>`).join("")}`).join(""):'<div class="empty">No spells yet. Add from the SRD library or create custom ones.</div>'}
   </div>`;}
+function setPrepared(i,v){const c=cur();const s=c.spellcasting.spells[i];if(!s)return;
+  s.prepared=!!v;touch();
+  const el=$("#prepInfo");if(el)el.innerHTML=preparedInfo(c); /* update the counter in place, don't collapse open spells */}
 function toggleSlot(l,i){const s=cur().spellcasting.slots[l];s.used=i<s.used?i:i+1;touch();renderTab();}
 function togglePact(i){const p=cur().spellcasting.pact;p.used=i<p.used?i:i+1;touch();renderTab();}
 function castSpell(lv,concName){const sc=cur().spellcasting;
+  if(concName&&concentrationBlocked(concName))return; /* declined: no slot is spent */
   // find lowest available slot >= lv
   for(let l=lv;l<=9;l++){const s=sc.slots[l];
     if(s.max-s.used>0){s.used++;if(concName)setConcentration(concName);touch();renderTab();toast(`✨ Cast with level ${l} slot (${s.max-s.used} left)${concName?" · 🧠 concentrating":""}`);return;}}
@@ -1996,13 +2264,18 @@ function spellCap(c,cls,lv){ /* {spells,cantrips,mode} for a class at level lv *
   if(cls==="Paladin"||cls==="Artificer")return lv>=(cls==="Paladin"?2:1)?{spells:Math.max(1,amod(c,ab)+Math.floor(lv/2)),cantrips:cant,mode:"prepared"}:{spells:0,cantrips:cant,mode:"prepared"};
   return {spells:0,cantrips:0,mode:"known"};}
 function preparedInfo(c){
-  const k=c.classes.find(x=>CASTER_KIND[x.name]);if(!k)return "";
-  const cap=spellCap(c,k.name,k.level);
-  if(!cap.spells&&!cap.cantrips)return "";
+  const ks=(c.classes||[]).filter(x=>CASTER_KIND[x.name]).map(k=>[k,spellCap(c,k.name,k.level)])
+    .filter(([,cap])=>cap.spells||cap.cantrips);
+  if(!ks.length)return "";
   const sc=c.spellcasting;
-  const nSp=sc.spells.filter(s=>s.level>0&&!s.always&&!s.fromItem&&(cap.mode==="known"||s.prepared)).length;
-  const nCa=sc.spells.filter(s=>s.level===0&&!s.fromItem).length;
-  return `${cap.mode==="known"?"Known":"Prepared"}: <b>${nSp}/${cap.spells}</b> spells · <b>${nCa}/${cap.cantrips}</b> cantrips <span class="dim">(${esc(k.name)} suggestion)</span>`;}
+  const known=sc.spells.filter(s=>s.level>0&&!s.always&&!s.fromItem).length;
+  const prep=sc.spells.filter(s=>s.level>0&&!s.always&&!s.fromItem&&s.prepared).length;
+  const cant=sc.spells.filter(s=>s.level===0&&!s.fromItem).length;
+  const rows=ks.map(([k,cap])=>`${esc(k.name)} — ${cap.mode==="known"?"known":"prepared"} <b>${cap.mode==="known"?known:prep}/${cap.spells}</b>`
+    +(cap.cantrips?` · cantrips <b>${cant}/${cap.cantrips}</b>`:""));
+  /* spells aren't tagged with the class that granted them, so in a multiclass build each
+     allowance is listed on its own rather than pretending we can split the list */
+  return rows.join(" &nbsp;|&nbsp; ")+` <span class="dim">(${ks.length>1?"one allowance per class — spells aren't tagged by class":"suggestion"})</span>`;}
 function maxSlotLv(c){const sc=c.spellcasting;let m=0;
   for(let l=1;l<=9;l++)if(sc.slots[l].max>0)m=l;
   if(sc.pact.max>0)m=Math.max(m,sc.pact.level);return m;}
@@ -2142,6 +2415,7 @@ function saveCustomSpell(i){const sc=cur().spellcasting;
   if(uses)s.usesLeft=Math.min(old.usesLeft??uses,uses);
   i>=0?sc.spells[i]=s:sc.spells.push(s);touch();closeModal();renderTab();}
 function castItemSpell(i){const s=cur().spellcasting.spells[i];const mx=+s.uses||0;
+  if(s.conc&&concentrationBlocked(s.name))return; /* declined: no use is spent */
   if((s.usesLeft??mx)<=0){toast("No uses left — recovers "+(s.recharge==="dawn"?"🌅 at dawn":s.recharge==="short"?"🌙 on a short rest":"☀️ on a long rest"));return;}
   s.usesLeft=(s.usesLeft??mx)-1;if(s.conc)setConcentration(s.name);touch();renderTab();
   toast("✨ "+esc(s.name)+(s.fromItem?" ("+esc(s.fromItem)+")":"")+" — "+s.usesLeft+"/"+mx+" uses left");}
@@ -2149,9 +2423,8 @@ function castItemSpell(i){const s=cur().spellcasting.spells[i];const mx=+s.uses|
 /* ================== INVENTORY TAB ================== */
 function coinsToGp(cu){return cu.pp*10+cu.gp+cu.ep*0.5+cu.sp*0.1+cu.cp*0.01;}
 function renderInv(){const c=cur();const inv=c.inventory;
-  const totW=inv.items.reduce((a,it)=>a+(+it.weight||0)*(+it.qty||1),0);
-  const pb2=c.features.some(f=>/powerful build/i.test(f.name||""))?2:1;
-  const cap=abl(c,"str")*15*pb2;
+  const enc=encumbrance(c);
+  const totW=enc.w,cap=enc.cap;
   const attuned=inv.items.filter(i=>i.attuned).length;
   $("#scr-inv").innerHTML=`
   <div class="card">
@@ -2163,7 +2436,15 @@ function renderInv(){const c=cur();const inv=c.inventory;
     <div class="section-head"><h2 style="margin:0">Items</h2><div>
       <button class="pill" onclick="openItemBrowser()">📖 SRD</button>
       <button class="pill" onclick="editItem(-1)">＋ Add</button></div></div>
-    <div class="dim" style="margin-bottom:8px">Weight ${totW.toFixed(1)} / ${cap} lb ${totW>cap?'<span class="warn">— encumbered!</span>':""} · Attuned ${attuned}/3${attuned>3?' <span class="warn">(!)</span>':""}</div>
+    <div class="dim" style="margin-bottom:8px">Weight ${totW.toFixed(1)} / ${cap} lb ${totW>cap?'<span class="warn">— over your carrying capacity!</span>':""} · Attuned ${attuned}/3${attuned>3?' <span class="warn">(!)</span>':""}</div>
+    <div class="row" style="margin-bottom:8px;align-items:center">
+      <button class="pill ${c.encVariant?"on":""}" style="flex:none" onclick="cur().encVariant=!cur().encVariant;touch();renderTab()" title="Optional PHB rule: Str×5 = encumbered (−10 ft), Str×10 = heavily encumbered (−20 ft)">🎒 Variant encumbrance</button>
+      <span class="dim">${c.encVariant
+        ? (enc.level===2?`<span class="warn">Heavily encumbered</span> (over ${enc.t2} lb) — speed −20 ft, applied`
+          :enc.level===1?`<span style="color:var(--gold)">Encumbered</span> (over ${enc.t1} lb) — speed −10 ft, applied`
+          :`Unencumbered — next threshold ${enc.t1} lb`)
+        : `off — thresholds would be ${enc.t1} / ${enc.t2} lb`}</span>
+    </div>
     <input placeholder="🔍 Filter items…" oninput="filterItems(this.value)" id="invFilter">
     <div class="spacer"></div>
     <div id="itemList">${inv.items.length?inv.items.map((it,i)=>itemRow(it,i)).join(""):'<div class="empty">Backpack is empty</div>'}</div>
@@ -2273,10 +2554,14 @@ function saveItem(i){const inv=cur().inventory;
     it.weapon={parts:parts.length?parts:[{d:"1d6",t:""}],dmg:(parts[0]||{}).d||"1d6",type:(parts[0]||{}).t||"",
       kind:$("#it_wKind").value,finesse:$("#it_wFin").checked,mastery:$("#it_wMastery").value||undefined};}
   i>=0?inv.items[i]=it:inv.items.push(it);
-  /* keep linked attack in sync */
-  const atk=cur().attacks.find(a=>a.itemId===(it.id||it.name));
-  if(atk&&it.weapon){atk.magic=it.magic;atk.kind=it.weapon.kind;atk.mastery=it.weapon.mastery;
-    atk.dmgParts=it.weapon.parts.map(p=>({...p}));}
+  /* keep the linked attack in sync — match on id, falling back to the pre-edit name so
+     items created before ids existed re-attach instead of silently orphaning their attack */
+  const atk=cur().attacks.find(a=>a.itemId===it.id||(old.name&&a.itemId===old.name));
+  if(atk){
+    atk.itemId=it.id;
+    if(old.name&&atk.name===old.name)atk.name=it.name; /* renaming the item renames its attack */
+    if(it.weapon){atk.magic=it.magic;atk.kind=it.weapon.kind;atk.mastery=it.weapon.mastery;
+      atk.dmgParts=it.weapon.parts.map(p=>({...p}));}}
   touch();closeModal();renderTab();}
 /* ================== FEATURES TAB ================== */
 const KIND_TAG={action:"⚡ action",bonus:"⚡ bonus action",reaction:"⚡ reaction",active:"⚡ active"};
@@ -2760,12 +3045,514 @@ function addSrdItem(name){const it=SRD.items.find(x=>x.name===name);if(!it)retur
     inv.items.push(ni);}
   touch();renderTab();toast("🎒 "+esc(it.name)+" added — equip it to apply AC/attacks");}
 
-/* ================== INIT (v1.0) ================== */
+
+/* ================== SELF-TESTS ==================
+   Regression harness for the pure logic. Runs only with ?selftest=1 in the URL,
+   never touches localStorage, and restores your real characters when it finishes.
+   Costs the shipped app nothing — it is one string comparison at startup. */
+function runSelfTests(){
+  const results=[];
+  const t=(name,fn)=>{try{fn();results.push({name,ok:true});}
+    catch(e){results.push({name,ok:false,msg:(e&&e.message)||String(e)});}};
+  const eq=(a,b,m)=>{if(a!==b)throw new Error((m?m+": ":"")+"expected "+JSON.stringify(b)+", got "+JSON.stringify(a));};
+  const ok=(v,m)=>{if(!v)throw new Error(m||"expected truthy");};
+  const rng=(a,lo,hi,m)=>{if(!(a>=lo&&a<=hi))throw new Error((m?m+": ":"")+a+" not in ["+lo+"–"+hi+"]");};
+
+  /* isolate: snapshot the real db and stub every side effect */
+  const snapshot=JSON.stringify(db);
+  const real={save,toast,openModal,closeModal,renderTab,confirm:window.confirm,prompt:window.prompt};
+  save=()=>{};toast=()=>{};openModal=()=>{};closeModal=()=>{};renderTab=()=>{};
+  window.confirm=()=>true;window.prompt=()=>null;
+  const mk=mut=>{const c=migrate(newCharacter());db.characters=[c];db.currentId=c.id;if(mut)mut(c);return c;};
+
+  try{
+  /* ---- dice ---- */
+  t("d20 stays in range",()=>{for(let i=0;i<400;i++)rng(rollDie(20),1,20);});
+  t("d1 always rolls 1",()=>eq(rollDie(1),1));
+  t("every face of a d6 is reachable",()=>{const seen=new Set();
+    for(let i=0;i<600;i++)seen.add(rollDie(6));eq(seen.size,6);});
+  t("rollExpr parses 2d6+3",()=>{const r=rollExpr("2d6+3");ok(r);rng(r.total,5,15);});
+  t("rollExpr handles a negative modifier",()=>{const r=rollExpr("1d4-1");ok(r);rng(r.total,0,3);});
+  t("rollExpr rejects text with no dice",()=>eq(rollExpr("no dice here"),null));
+
+  /* ---- core maths ---- */
+  t("ability modifiers",()=>{eq(mod(10),0);eq(mod(11),0);eq(mod(20),5);eq(mod(7),-2);eq(mod(1),-5);});
+  t("proficiency bonus by level",()=>{const c=mk();
+    [[1,2],[4,2],[5,3],[9,4],[13,5],[17,6],[20,6]].forEach(([lv,pb])=>{
+      c.classes[0].level=lv;eq(profBonus(c),pb,"level "+lv);});});
+  t("formula evaluation",()=>{const c=mk(x=>{x.classes[0].level=8;x.abilities.cha=18;});
+    eq(evalFormula(c,3),3);eq(evalFormula(c,"prof"),3);eq(evalFormula(c,"level"),8);
+    eq(evalFormula(c,"2*level"),16);eq(evalFormula(c,"max(1,cha)"),4);
+    eq(evalFormula(c,"level>=17?6:level>=12?5:level>=6?4:level>=3?3:2"),4);});
+  t("formulas cannot run arbitrary code",()=>{const c=mk();
+    eq(evalFormula(c,"alert(1)"),0);eq(evalFormula(c,"window"),0);eq(evalFormula(c,"fetch('x')"),0);});
+  t("escaping blocks HTML injection",()=>{
+    eq(esc("<img src=x onerror=alert(1)>"),"&lt;img src=x onerror=alert(1)&gt;");
+    eq(esc("Tom's"),"Tom&#39;s");});
+
+  /* ---- skills & saves ---- */
+  t("skill modifier: proficiency, expertise, jack of all trades",()=>{
+    const c=mk(x=>{x.classes[0].level=5;x.abilities.dex=16;});
+    eq(skillMod(c,"stealth"),3,"untrained");
+    c.skills.stealth=1;eq(skillMod(c,"stealth"),6,"proficient");
+    c.skills.stealth=2;eq(skillMod(c,"stealth"),9,"expertise");
+    c.skills.stealth=0;c.jack=true;eq(skillMod(c,"stealth"),4,"jack of all trades");});
+  t("saving throws add proficiency",()=>{const c=mk(x=>{x.classes[0].level=5;x.abilities.con=14;});
+    eq(saveMod(c,"con"),2);c.saveProf.con=true;eq(saveMod(c,"con"),5);});
+
+  /* ---- effects engine ---- */
+  t("effects stack and '.all' reaches every member",()=>{
+    const c=mk(x=>{x.classes[0].level=5;x.abilities.cha=16;
+      x.features.push({name:"Aura of Protection",effects:[{t:"save.all",v:"max(1,cha)"}]},
+                      {name:"Test ring",effects:[{t:"save.dex",v:1}]});});
+    eq(bonusFor(c,"save.dex"),4,"aura 3 + specific 1");
+    eq(bonusFor(c,"save.con"),3,"aura only");});
+  t("item effects need the item equipped and attuned",()=>{
+    const c=mk(x=>{x.inventory.items.push({id:"i1",name:"Cloak of Protection",cat:"Wondrous",qty:1,
+      needsAttune:true,equipped:false,attuned:false,effects:[{t:"ac",v:1},{t:"save.all",v:1}]});});
+    eq(bonusFor(c,"save.str"),0,"unequipped");
+    c.inventory.items[0].equipped=true;eq(bonusFor(c,"save.str"),0,"equipped, not attuned");
+    c.inventory.items[0].attuned=true;eq(bonusFor(c,"save.str"),1,"equipped and attuned");});
+  t("ability-score effects feed through to the modifier",()=>{
+    const c=mk(x=>{x.abilities.str=16;x.features.push({name:"Belt",effects:[{t:"abl.str",v:2}]});});
+    eq(abl(c,"str"),18);eq(amod(c,"str"),4);});
+  t("Tough raises max HP by 2 per level",()=>{
+    const c=mk(x=>{x.classes[0].level=6;x.hp.max=40;
+      x.features.push({name:"Tough",effects:[{t:"hpmax",v:"2*level"}]});});
+    eq(maxHP(c),52);});
+
+  /* ---- armour class ---- */
+  t("AC: manual mode uses the typed number",()=>{const c=mk(x=>{x.acMode="manual";x.ac=17;});eq(acVal(c),17);});
+  t("AC: unarmored is 10 + Dex",()=>{const c=mk(x=>{x.acMode="auto";x.abilities.dex=16;});eq(acVal(c),13);});
+  t("AC: medium armour caps Dex and a shield adds 2",()=>{
+    const c=mk(x=>{x.acMode="auto";x.abilities.dex=18;
+      x.inventory.items.push({id:"a",name:"Half Plate",cat:"Armor",qty:1,equipped:true,armor:{base:15,dexCap:2},effects:[]},
+                             {id:"s",name:"Shield",cat:"Shield",qty:1,equipped:true,effects:[]});});
+    eq(acVal(c),19,"15 + 2 Dex + 2 shield");});
+  t("AC: heavy armour ignores Dex",()=>{
+    const c=mk(x=>{x.acMode="auto";x.abilities.dex=18;
+      x.inventory.items.push({id:"a",name:"Plate",cat:"Armor",qty:1,equipped:true,armor:{base:18,dexCap:0},effects:[]});});
+    eq(acVal(c),18);});
+  t("AC: Unarmored Defense (Barbarian)",()=>{
+    const c=mk(x=>{x.acMode="auto";x.classes=[{name:"Barbarian",subclass:"",level:3}];
+      x.abilities.dex=14;x.abilities.con=16;
+      x.features.push({name:"Unarmored Defense",desc:"AC equals 10 + Dex + your Constitution modifier",effects:[]});});
+    eq(acVal(c),15,"10 + 2 Dex + 3 Con");});
+  t("AC: the Defense style only counts while armoured",()=>{
+    const c=mk(x=>{x.acMode="auto";x.abilities.dex=10;
+      x.features.push({name:"Fighting Style: Defense",effects:[{t:"ac",v:1,when:"armored"}]});});
+    eq(acVal(c),10,"no armour: style inactive");
+    c.inventory.items.push({id:"a",name:"Chain Shirt",cat:"Armor",qty:1,equipped:true,armor:{base:13,dexCap:2},effects:[]});
+    eq(acVal(c),14,"13 + 0 Dex + 1 Defense");});
+
+  /* ---- spell slots ---- */
+  t("slots: full caster table",()=>{const c=mk(x=>{x.classes=[{name:"Wizard",subclass:"",level:5}];});
+    autoSlotsFromClasses(c);const sl=c.spellcasting.slots;
+    eq(sl[1].max,4);eq(sl[2].max,3);eq(sl[3].max,2);eq(sl[4].max,0);});
+  t("slots: a single-classed half caster rounds up",()=>{
+    const c=mk(x=>{x.classes=[{name:"Paladin",subclass:"",level:5}];});
+    autoSlotsFromClasses(c);const sl=c.spellcasting.slots;
+    eq(sl[1].max,4);eq(sl[2].max,2);eq(sl[3].max,0);eq(c.spellcasting.ability,"cha");});
+  t("slots: warlocks use pact magic, not normal slots",()=>{
+    const c=mk(x=>{x.classes=[{name:"Warlock",subclass:"",level:5}];});
+    autoSlotsFromClasses(c);
+    eq(c.spellcasting.slots[1].max,0);eq(c.spellcasting.pact.max,2);eq(c.spellcasting.pact.level,3);});
+  t("slots: multiclass halves round down",()=>{
+    const c=mk(x=>{x.classes=[{name:"Wizard",subclass:"",level:4},{name:"Cleric",subclass:"",level:1},{name:"Paladin",subclass:"",level:3}];});
+    autoSlotsFromClasses(c); /* 4 + 1 + floor(3/2) = caster level 6 */
+    eq(c.spellcasting.slots[3].max,3);eq(c.spellcasting.slots[4].max,0);});
+  t("casting spends the lowest slot at or above the level",()=>{
+    const c=mk(x=>{x.classes=[{name:"Wizard",subclass:"",level:5}];});
+    autoSlotsFromClasses(c);c.spellcasting.slots[1].used=4;
+    castSpell(1,null);
+    eq(c.spellcasting.slots[2].used,1,"upcast into level 2");
+    eq(c.spellcasting.slots[1].used,4,"level 1 untouched");});
+  t("declining a concentration swap costs no slot",()=>{
+    const c=mk(x=>{x.classes=[{name:"Wizard",subclass:"",level:5}];});
+    autoSlotsFromClasses(c);c.concentration="Haste";
+    window.confirm=()=>false;
+    castSpell(1,"Fly");
+    eq(c.spellcasting.slots[1].used,0,"no slot spent");
+    eq(c.concentration,"Haste","old spell kept");
+    window.confirm=()=>true;
+    castSpell(1,"Fly");
+    eq(c.spellcasting.slots[1].used,1);eq(c.concentration,"Fly");});
+  t("spells known / prepared capacity",()=>{
+    const c=mk(x=>{x.abilities.int=16;x.abilities.cha=16;});
+    eq(spellCap(c,"Bard",5).spells,8);eq(spellCap(c,"Bard",5).mode,"known");
+    const w=spellCap(c,"Wizard",5);eq(w.mode,"prepared");eq(w.spells,8,"Int 3 + level 5");});
+
+  /* ---- damage, healing, concentration ---- */
+  t("temporary HP absorbs damage first",()=>{const c=mk(x=>{x.hp={max:20,current:20,temp:5};});
+    applyDamage(3);eq(c.hp.temp,2);eq(c.hp.current,20);
+    applyDamage(6);eq(c.hp.temp,0);eq(c.hp.current,16);});
+  t("the − button and the Damage prompt behave identically",()=>{
+    const a=mk(x=>{x.hp={max:20,current:20,temp:2};});
+    hpDelta(-1);eq(a.hp.temp,1,"− button eats temp HP");
+    const b=mk(x=>{x.hp={max:20,current:20,temp:2};});
+    applyDamage(1);eq(b.hp.temp,1,"prompt does the same");});
+  t("the − button also triggers the concentration save",()=>{
+    const c=mk(x=>{x.hp={max:20,current:10,temp:0};x.concentration="Bless";});
+    let asked=0;openModal=()=>{asked++;};
+    try{hpDelta(-1);}finally{openModal=()=>{};}
+    eq(asked,1,"− button prompts the CON save, exactly like Damage…");
+    eq(c.hp.current,9);});
+  t("the − button ends concentration when it drops you to 0",()=>{
+    const c=mk(x=>{x.hp={max:20,current:1,temp:0};x.concentration="Bless";x.activeBuffs=["Bless"];});
+    hpDelta(-1);
+    eq(c.hp.current,0);eq(c.concentration,null,"unconscious ends concentration");
+    eq(c.activeBuffs.length,0);});
+  t("dropping to 0 HP ends concentration and its buff",()=>{
+    const c=mk(x=>{x.hp={max:10,current:4,temp:0};x.concentration="Bless";x.activeBuffs=["Bless"];});
+    applyDamage(9);
+    eq(c.hp.current,0);eq(c.concentration,null);eq(c.activeBuffs.length,0);});
+  t("healing above 0 clears death saves",()=>{
+    const c=mk(x=>{x.hp={max:10,current:0,temp:0};x.deathSaves={s:2,f:1};});
+    applyHealing(4);eq(c.hp.current,4);eq(c.deathSaves.f,0);});
+  t("damage never pushes HP below 0",()=>{const c=mk(x=>{x.hp={max:10,current:3,temp:0};});
+    applyDamage(999);eq(c.hp.current,0);});
+  t("toggling a concentration buff off drops concentration",()=>{
+    const c=mk();
+    toggleBuff("Shield of Faith");eq(c.concentration,"Shield of Faith");
+    toggleBuff("Shield of Faith");eq(c.concentration,null);eq(c.activeBuffs.length,0);});
+  t("Bless applies to attacks and saves but not checks",()=>{
+    const c=mk();
+    eq(buffD20Extras(c,"attack").length,0);
+    c.activeBuffs=["Bless"];
+    eq(buffD20Extras(c,"attack").length,1);
+    eq(buffD20Extras(c,"save").length,1);
+    eq(buffD20Extras(c,"check").length,0);});
+  t("roll labels are classified correctly",()=>{
+    eq(rollKind("Longsword attack"),"attack");
+    eq(rollKind("Dexterity save"),"save");
+    eq(rollKind("Stealth"),"check");});
+
+  /* ---- rests ---- */
+  t("long rest restores HP, slots, uses and half the hit dice",()=>{
+    const c=mk(x=>{x.classes=[{name:"Wizard",subclass:"",level:5}];x.hp={max:30,current:4,temp:7};
+      x.hitDice={die:"d6",total:5,used:5};
+      x.features.push({name:"Arcane Recovery",uses:1,recharge:"long",usesLeft:0,effects:[]});
+      x.activeBuffs=["Bless"];x.concentration="Bless";});
+    autoSlotsFromClasses(c);c.spellcasting.slots[1].used=4;
+    longRest();
+    eq(c.hp.current,30);eq(c.hp.temp,0);eq(c.spellcasting.slots[1].used,0);
+    eq(c.hitDice.used,3,"regain half the total");
+    eq(c.features[0].usesLeft,1);
+    eq(c.concentration,null);eq(c.activeBuffs.length,0);});
+  t("short rest restores pact slots and short-rest features only",()=>{
+    const c=mk(x=>{x.classes=[{name:"Warlock",subclass:"",level:5}];
+      x.features.push({name:"Second Wind",uses:1,recharge:"short",usesLeft:0,effects:[]},
+                      {name:"Rage",uses:3,recharge:"long",usesLeft:0,effects:[]});});
+    autoSlotsFromClasses(c);c.spellcasting.pact.used=2;
+    shortRest();
+    eq(c.spellcasting.pact.used,0);
+    eq(c.features[0].usesLeft,1,"short-rest feature restored");
+    eq(c.features[1].usesLeft,0,"long-rest feature untouched");});
+  t("'regain 1 per short rest' regains exactly one",()=>{
+    const c=mk(x=>{x.features.push({name:"Channel Divinity",uses:3,recharge:"short1",usesLeft:0,effects:[]});});
+    shortRest();eq(c.features[0].usesLeft,1);
+    shortRest();eq(c.features[0].usesLeft,2);});
+
+  /* ---- attacks & ammunition ---- */
+  t("to-hit adds ability, proficiency and magic",()=>{
+    const c=mk(x=>{x.classes[0].level=5;x.abilities.str=18;
+      x.attacks.push({name:"Longsword",ability:"str",proficient:true,kind:"melee",magic:1,
+        addAbility:true,bonusMisc:0,dmgParts:[{d:"1d8",t:"slashing"}]});});
+    eq(attackBonus(c,c.attacks[0]),8,"4 Str + 3 prof + 1 magic");
+    eq(attackDmgExtra(c,c.attacks[0]),5,"4 Str + 1 magic");});
+  t("the Archery style only helps ranged attacks",()=>{
+    const c=mk(x=>{x.abilities.dex=14;x.abilities.str=14;
+      x.features.push({name:"Fighting Style: Archery",effects:[{t:"atk.ranged",v:2}]});
+      x.attacks.push({name:"Bow",ability:"dex",proficient:false,kind:"ranged",dmgParts:[]},
+                     {name:"Club",ability:"str",proficient:false,kind:"melee",dmgParts:[]});});
+    eq(attackBonus(c,c.attacks[0]),4,"2 Dex + 2 Archery");
+    eq(attackBonus(c,c.attacks[1]),2,"melee unaffected");});
+  t("ammunition is spent and cannot go negative",()=>{
+    const c=mk(x=>{x.inventory.items.push({id:"am",name:"Arrows",cat:"Ammo",qty:2,effects:[]});
+      x.attacks.push({name:"Longbow",ability:"dex",kind:"ranged",ammoId:"am",dmgParts:[{d:"1d8",t:"piercing"}]});});
+    rollAttackHit(0);eq(c.inventory.items[0].qty,1);
+    rollAttackHit(0);eq(c.inventory.items[0].qty,0);
+    rollAttackHit(0);eq(c.inventory.items[0].qty,0,"blocked at zero");});
+
+  /* ---- roll history ---- */
+  t("history records the die actually used, not the first roll",()=>{
+    db.rollLog=[];const c=mk();
+    d20Roll("Harness roll",3);
+    const r1=lastRoll.r1,r2=lastRoll.r2;
+    eq(db.rollLog[0].total,r1+3,"normal");
+    showRoll("adv");eq(db.rollLog[0].total,Math.max(r1,r2)+3,"advantage rewrites the entry");
+    showRoll("dis");eq(db.rollLog[0].total,Math.min(r1,r2)+3,"disadvantage rewrites the entry");
+    eq(db.rollLog.length,1,"one entry, not three");});
+
+  /* ---- defences ---- */
+  t("granted resistances are listed with their source marker",()=>{
+    const c=mk(x=>{x.features.push({name:"Hellish Resistance",effects:[{t:"resist.fire",v:1}]});});
+    eq(defCount(c),1);ok(/fire/.test(defSummary(c)));ok(/Resistant/.test(defSummary(c)));});
+  t("a manual and a granted resistance count once, not twice",()=>{
+    const c=mk(x=>{x.defenses.dmg.fire="resist";
+      x.features.push({name:"Hellish Resistance",effects:[{t:"resist.fire",v:1}]});});
+    eq(defCount(c),1,"badge matches the list");
+    eq((defSummary(c).match(/fire/g)||[]).length,1);});
+  t("an empty defences block renders without throwing",()=>{
+    const c=mk();eq(typeof defSummary(c),"string");eq(defCount(c),0);});
+
+  /* ---- save-file robustness ---- */
+  t("migrate repairs a half-built character",()=>{
+    const c=migrate({name:"Rusty",abilities:{str:14},defenses:{dmg:{fire:"resist"}},
+      classes:[{name:"Rogue",level:"7"}],inventory:{items:[{name:"Dagger"}]},
+      attacks:[{name:"Dagger",itemId:"Dagger"}],spellcasting:{}});
+    ok(Array.isArray(c.defenses.condimm),"condimm array created");
+    ok(Array.isArray(c.defenses.custom),"custom array created");
+    eq(c.abilities.dex,10,"missing scores default to 10");
+    eq(c.classes[0].level,7,"string level coerced");
+    eq(c.skills.stealth,0);
+    eq(c.spellcasting.slots[9].max,0,"all nine slot levels exist");
+    eq(c.spellcasting.pact.max,0);
+    eq(c.inventory.currency.gp,0);
+    ok(c.inventory.items[0].id,"item was given an id");
+    eq(c.attacks[0].itemId,c.inventory.items[0].id,"attack re-pointed to that id");
+    eq(c.schema,SCHEMA_VERSION);});
+  t("migrate is idempotent",()=>{
+    const a=migrate(newCharacter());const before=JSON.stringify(a);
+    migrate(a);eq(JSON.stringify(a),before);});
+  t("migrate survives outright garbage",()=>{
+    const c=migrate({name:"Broken",classes:"nonsense",skills:5,attacks:null,
+      features:[null,{name:"Real"}],inventory:{items:[null,{name:"Rope"}]}});
+    eq(c.classes.length,1,"fell back to a default class");
+    eq(c.features.length,1,"null feature dropped");
+    eq(c.inventory.items.length,1,"null item dropped");});
+
+
+  /* ---- 2024 exhaustion: applied as a number, visible in every breakdown ---- */
+  t("2024 exhaustion penalises every d20 test by 2 per level",()=>{
+    const c=mk(x=>{x.edition="2024";x.classes[0].level=5;x.abilities.dex=14;x.abilities.con=14;
+      x.saveProf.con=true;x.skills.stealth=1;});
+    const base={save:saveMod(c,"con"),skill:skillMod(c,"stealth"),chk:ablCheckMod(c,"dex"),
+                init:initMod(c),spatk:spellAtkMod(c),speed:speedVal(c),dc:spellDC(c)};
+    c.exhaustion=2;
+    eq(saveMod(c,"con"),base.save-4,"saving throws");
+    eq(skillMod(c,"stealth"),base.skill-4,"skill checks");
+    eq(ablCheckMod(c,"dex"),base.chk-4,"raw ability checks");
+    eq(initMod(c),base.init-4,"initiative");
+    eq(spellAtkMod(c),base.spatk-4,"spell attacks");
+    eq(speedVal(c),base.speed-10,"speed −5 ft per level");
+    eq(spellDC(c),base.dc,"DCs are NOT affected in the 2024 rules");});
+  t("2024 exhaustion hits weapon attacks too",()=>{
+    const c=mk(x=>{x.edition="2024";x.abilities.str=16;
+      x.attacks.push({name:"Axe",ability:"str",proficient:false,kind:"melee",dmgParts:[]});});
+    const before=attackBonus(c,c.attacks[0]);
+    c.exhaustion=3;
+    eq(attackBonus(c,c.attacks[0]),before-6);});
+  t("2024 exhaustion appears in the breakdown, not just the total",()=>{
+    const c=mk(x=>{x.edition="2024";x.exhaustion=1;});
+    const rows=bonusDetail(c,"save.str");
+    eq(rows.length,1);eq(rows[0].v,-2);
+    ok(/Exhaustion/.test(rows[0].src),"named so the ⓘ popup can explain it");});
+  t("2014 exhaustion changes no totals",()=>{
+    const c=mk(x=>{x.edition="2014";x.abilities.dex=14;});
+    const before=[saveMod(c,"dex"),skillMod(c,"stealth"),speedVal(c),ablCheckMod(c,"dex")];
+    c.exhaustion=4;
+    eq(JSON.stringify([saveMod(c,"dex"),skillMod(c,"stealth"),speedVal(c),ablCheckMod(c,"dex")]),
+       JSON.stringify(before),"2014 is a ladder of conditions — warning only");});
+  t("2014 exhaustion warns at roll time instead",()=>{
+    const c=mk(x=>{x.edition="2014";x.exhaustion=3;});
+    ok(rollAdvice(c,"check",{}).notes.some(n=>/Exhaustion 3/.test(n)),"warns on checks");
+    ok(rollAdvice(c,"attack",{}).notes.some(n=>/disadvantage on attack rolls/.test(n)),"warns on attacks");
+    eq(rollAdvice(c,"attack",{}).dis.length,0,"but never decides for you");});
+  t("speed never goes below 0",()=>{
+    const c=mk(x=>{x.edition="2024";x.speed=25;x.exhaustion=5;}); /* halfling speed */
+    eq(speedVal(c),0,"25 − 25 = 0");
+    c.exhaustion=6;
+    eq(speedVal(c),0,"25 − 30 would be −5: clamped, not negative");
+    c.exhaustion=2;eq(speedVal(c),15,"and still arithmetic when it fits");});
+
+  /* ---- conditions colour the roll ---- */
+  t("Poisoned imposes disadvantage on attacks and checks, not saves",()=>{
+    const c=mk(x=>{x.conditions=["Poisoned"];});
+    eq(rollAdvice(c,"attack",{}).dis.join(),"Poisoned");
+    eq(rollAdvice(c,"check",{}).dis.join(),"Poisoned");
+    eq(rollAdvice(c,"save",{ab:"con"}).dis.length,0);});
+  t("Restrained hits attacks and Dexterity saves only",()=>{
+    const c=mk(x=>{x.conditions=["Restrained"];});
+    eq(rollAdvice(c,"attack",{}).dis.join(),"Restrained");
+    eq(rollAdvice(c,"save",{ab:"dex"}).dis.join(),"Restrained");
+    eq(rollAdvice(c,"save",{ab:"wis"}).dis.length,0);});
+  t("Frightened is a warning, not an automatic penalty",()=>{
+    const c=mk(x=>{x.conditions=["Frightened"];});
+    const a=rollAdvice(c,"attack",{});
+    eq(a.dis.length,0,"only applies while the source is in sight");
+    ok(a.notes.some(n=>/Frightened/.test(n)));});
+  t("Paralyzed makes Strength and Dexterity saves fail automatically",()=>{
+    const c=mk(x=>{x.conditions=["Paralyzed"];});
+    ok(rollAdvice(c,"save",{ab:"str"}).notes.some(n=>/fails automatically/.test(n)));
+    ok(!rollAdvice(c,"save",{ab:"cha"}).notes.some(n=>/fails automatically/.test(n)));});
+  t("advantage and disadvantage cancel to a straight roll",()=>{
+    const c=mk(x=>{x.conditions=["Invisible","Poisoned"];});
+    const a=rollAdvice(c,"attack",{});
+    eq(a.adv.join(),"Invisible");eq(a.dis.join(),"Poisoned");
+    d20Roll("Test attack",0,"",{kind:"attack"});
+    eq(db.rollLog[0].detail.slice(0,3),"d20","cancelled: neither adv nor dis prefix");});
+  t("a rolled condition pre-selects the disadvantage pill",()=>{
+    const c=mk(x=>{x.conditions=["Poisoned"];});
+    db.rollLog=[];
+    d20Roll("Test attack",0,"",{kind:"attack"});
+    eq(db.rollLog[0].total,Math.min(lastRoll.r1,lastRoll.r2),"lower die used");
+    eq(db.rollLog[0].detail.slice(0,3),"dis");});
+  t("no conditions means no interference",()=>{
+    const c=mk();db.rollLog=[];
+    d20Roll("Clean roll",2,"",{kind:"attack"});
+    eq(db.rollLog[0].total,lastRoll.r1+2);});
+
+  /* ---- armour ---- */
+  t("armour you lack the Strength for costs 10 ft of speed",()=>{
+    const c=mk(x=>{x.acMode="auto";x.speed=30;x.abilities.str=12;
+      x.inventory.items.push({id:"pl",name:"Plate",cat:"Armor",qty:1,equipped:true,
+        armor:{base:18,dexCap:0,strReq:15},effects:[]});});
+    eq(speedVal(c),20,"Str 12 < 15 required");
+    ok(bonusDetail(c,"speed").some(b=>/Plate/.test(b.src)),"named in the breakdown");
+    c.abilities.str=15;eq(speedVal(c),30,"requirement met");});
+  t("a Strength-boosting item can satisfy the armour requirement",()=>{
+    const c=mk(x=>{x.acMode="auto";x.speed=30;x.abilities.str=13;
+      x.inventory.items.push({id:"pl",name:"Plate",cat:"Armor",qty:1,equipped:true,armor:{base:18,dexCap:0,strReq:15},effects:[]},
+        {id:"belt",name:"Belt of Hill Giant Strength",cat:"Wondrous",qty:1,equipped:false,attuned:false,
+         needsAttune:true,effects:[{t:"abl.str",v:2}]});});
+    eq(speedVal(c),20,"belt not attuned yet");
+    c.inventory.items[1].equipped=true;c.inventory.items[1].attuned=true;
+    eq(speedVal(c),30,"Str 15 with the belt — no penalty");});
+  t("stealth-disadvantage armour is surfaced",()=>{
+    const c=mk(x=>{x.inventory.items.push({id:"pl",name:"Splint",cat:"Armor",qty:1,equipped:true,
+      armor:{base:17,dexCap:0,stealthDis:true},effects:[]});});
+    eq(armorStealthDis(c),"Splint");
+    ok(rollAdvice(c,"check",{skill:"stealth"}).notes.some(n=>/Splint/.test(n)));
+    eq(rollAdvice(c,"check",{skill:"acrobatics"}).notes.length,0,"only Stealth");});
+
+  /* ---- encumbrance ---- */
+  t("encumbrance thresholds follow Strength",()=>{
+    const c=mk(x=>{x.abilities.str=14;
+      x.inventory.items.push({id:"a",name:"Loot",qty:1,weight:60,effects:[]});});
+    const e=encumbrance(c);
+    eq(e.t1,70);eq(e.t2,140);eq(e.cap,210);eq(e.w,60);eq(e.level,0);});
+  t("Powerful Build doubles carrying capacity",()=>{
+    const c=mk(x=>{x.abilities.str=14;x.features.push({name:"Powerful Build",effects:[]});});
+    eq(encumbrance(c).cap,420);});
+  t("the variant rule is opt-in and then applies to speed",()=>{
+    const c=mk(x=>{x.abilities.str=10;x.speed=30;
+      x.inventory.items.push({id:"a",name:"Loot",qty:1,weight:60,effects:[]});});
+    eq(encumbrance(c).level,1,"60 lb is over Str×5 = 50");
+    eq(speedVal(c),30,"variant off by default");
+    c.encVariant=true;
+    eq(speedVal(c),20,"encumbered: −10 ft");
+    c.inventory.items[0].weight=120;
+    eq(encumbrance(c).level,2);eq(speedVal(c),10,"heavily encumbered: −20 ft");});
+  t("weight counts quantity",()=>{
+    const c=mk(x=>{x.inventory.items.push({id:"a",name:"Rations",qty:10,weight:2,effects:[]});});
+    eq(encumbrance(c).w,20);});
+
+  /* ---- death saves ---- */
+  t("a death save is read correctly and only applied when recorded",()=>{
+    const c=mk(x=>{x.hp={max:10,current:0,temp:0};});
+    applyDeathSave("succ");eq(c.deathSaves.s,1);
+    applyDeathSave("fail");eq(c.deathSaves.f,1);
+    applyDeathSave("fail2");eq(c.deathSaves.f,3,"a natural 1 is two failures");});
+  t("a natural 20 on a death save puts you back on 1 HP",()=>{
+    const c=mk(x=>{x.hp={max:10,current:0,temp:0};x.deathSaves={s:1,f:2};});
+    applyDeathSave("revive");
+    eq(c.hp.current,1);eq(c.deathSaves.s,0);eq(c.deathSaves.f,0);});
+  t("death saves never overshoot three",()=>{
+    const c=mk(x=>{x.deathSaves={s:2,f:2};});
+    applyDeathSave("succ");applyDeathSave("succ");eq(c.deathSaves.s,3);
+    applyDeathSave("fail2");eq(c.deathSaves.f,3);});
+  t("2024 exhaustion penalises death saves, 2014 does not",()=>{
+    const a=mk(x=>{x.edition="2024";x.exhaustion=2;});eq(deathSavePenalty(a),-4);
+    const b=mk(x=>{x.edition="2014";x.exhaustion=2;});eq(deathSavePenalty(b),0);});
+  t("rolling a death save does not silently change the dots",()=>{
+    const c=mk(x=>{x.hp={max:10,current:0,temp:0};});
+    rollDeathSave();
+    eq(c.deathSaves.s,0);eq(c.deathSaves.f,0,"you tap Record it");
+    eq(db.rollLog[0].label,"Death save","but it is logged");});
+
+  /* ---- ability checks as a first-class thing ---- */
+  t("check.* effects reach both raw ability checks and skills",()=>{
+    const c=mk(x=>{x.abilities.dex=14;x.skills.stealth=1;x.classes[0].level=5;
+      x.features.push({name:"Test charm",effects:[{t:"check.dex",v:3}]});});
+    eq(ablCheckMod(c,"dex"),5,"2 dex + 3");
+    eq(skillMod(c,"stealth"),8,"2 dex + 3 prof + 3");
+    eq(ablCheckMod(c,"str"),0,"other abilities untouched");});
+  t("check.all reaches every ability",()=>{
+    const c=mk(x=>{x.features.push({name:"Test",effects:[{t:"check.all",v:1}]});});
+    ABILITIES.forEach(a=>eq(ablCheckMod(c,a),1,a));});
+  t("the plain ability modifier is never changed by check effects",()=>{
+    const c=mk(x=>{x.edition="2024";x.abilities.str=18;x.exhaustion=2;
+      x.attacks.push({name:"Axe",ability:"str",proficient:false,kind:"melee",addAbility:true,magic:0,dmgParts:[{d:"1d8",t:""}]});});
+    eq(amod(c,"str"),4,"damage and DCs keep using the plain modifier");
+    eq(ablCheckMod(c,"str"),0,"but the check is penalised");
+    eq(attackDmgExtra(c,c.attacks[0]),4,"damage is not double-penalised");});
+  t("check bonuses do not leak into saves or attacks",()=>{
+    const c=mk(x=>{x.abilities.dex=14;
+      x.features.push({name:"Test",effects:[{t:"check.all",v:5}]});
+      x.attacks.push({name:"Bow",ability:"dex",proficient:false,kind:"ranged",dmgParts:[]});});
+    eq(saveMod(c,"dex"),2,"saves unaffected");
+    eq(attackBonus(c,c.attacks[0]),2,"attacks unaffected");});
+
+  /* ---- multiclass spell capacity ---- */
+  t("multiclass casters get one allowance line each",()=>{
+    const c=mk(x=>{x.classes=[{name:"Bard",subclass:"",level:5},{name:"Wizard",subclass:"",level:3}];
+      x.abilities.int=16;x.abilities.cha=16;});
+    const info=preparedInfo(c);
+    ok(/Bard/.test(info)&&/Wizard/.test(info),"both classes named");
+    ok(/known/.test(info)&&/prepared/.test(info),"each with its own mode");});
+  t("a non-caster gets no capacity line",()=>{
+    const c=mk(x=>{x.classes=[{name:"Fighter",subclass:"",level:5}];});
+    eq(preparedInfo(c),"");});
+
+  /* ---- homebrew reaches every picker ---- */
+  t("homebrew races are offered in the character editor",()=>{
+    const keep=db.customRaces;
+    db.customRaces=[{name:"Testling",size:"Small",speed:25,asi:{dex:2},traits:[]}];
+    mk();
+    ok(allRaces().some(r=>r.name==="Testling"),"allRaces includes homebrew");
+    ok(!!findRace("Testling"),"findRace resolves it");
+    openModal=real.openModal;
+    try{
+      editIdentity();
+      ok([...document.querySelectorAll("#raceList option")].map(o=>o.value).includes("Testling"),
+         "Edit character lists the homebrew race");
+      real.closeModal();
+      newCharWizard();
+      ok([...document.querySelectorAll("#raceList option")].map(o=>o.value).includes("Testling"),
+         "the creation wizard lists it too");
+    }finally{real.closeModal();openModal=()=>{};db.customRaces=keep;}});
+
+  }finally{
+    save=real.save;toast=real.toast;openModal=real.openModal;closeModal=real.closeModal;renderTab=real.renderTab;
+    window.confirm=real.confirm;window.prompt=real.prompt;
+    db=JSON.parse(snapshot);
+    try{cur()?renderTab():showList();}catch(_){}
+  }
+
+  const failed=results.filter(r=>!r.ok);
+  window.__selftest={total:results.length,failed:failed.length,results};
+  console.log("Grimoire self-tests: "+(results.length-failed.length)+"/"+results.length+" passed");
+  failed.forEach(f=>console.error("FAIL — "+f.name+" — "+f.msg));
+  const box=document.createElement("div");
+  box.id="selftestReport";
+  box.style.cssText="position:fixed;inset:0;z-index:9999;overflow:auto;background:var(--bg);padding:16px";
+  box.innerHTML='<h1 style="color:'+(failed.length?"var(--red)":"var(--green)")+'">'
+    +(failed.length?"❌ "+failed.length+" failed":"✅ All passed")
+    +' <span class="dim" style="font-size:15px">('+results.length+" checks)</span></h1>"
+    +'<button class="btn ghost" style="width:100%;margin:8px 0" onclick="this.parentElement.remove()">Close and use the app</button>'
+    +results.map(r=>'<div class="skrow"><div class="nm" style="font-size:14px">'+(r.ok?"✅":"❌")+" "+esc(r.name)
+      +(r.ok?"":'<div class="dim" style="color:var(--red)">'+esc(r.msg)+"</div>")+"</div></div>").join("");
+  document.body.appendChild(box);
+  return window.__selftest;}
+
+/* ================== INIT ================== */
 (async function init(){
   load();await loadSrd();
   if(db.currentId&&cur())openChar(db.currentId);else showList();
   if("serviceWorker" in navigator&&location.protocol!=="file:")
     navigator.serviceWorker.register("sw.js").catch(()=>{});
+  if(/[?&]selftest=1/.test(location.search)){try{runSelfTests();}catch(e){reportError("Self-tests",e);}}
 })();
 
 </script>

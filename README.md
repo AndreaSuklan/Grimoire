@@ -54,6 +54,20 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.3 — the sheet now knows the rules it was already tracking
+
+Conditions, exhaustion and armour were recorded but never affected a single number. They do now.
+
+- **😵 Exhaustion (2024)** is applied automatically: −2 per level on every d20 test (checks, saves, attacks, spell attacks, initiative) and −5 ft of speed per level. Your **DCs are not affected** — that matches the 2024 PHB. It flows through the same effects pipeline as everything else, so tap any modifier and you'll see the exhaustion row in the breakdown.
+- **😵 Exhaustion (2014)** is a ladder of *conditions*, not a number, so nothing is added to your totals. Instead you get a warning at roll time naming exactly which rungs apply ("disadvantage on ability checks; speed halved").
+- **Conditions colour your rolls.** Poisoned, Blinded, Prone, Restrained and the rest now pre-select the Disadvantage pill and say which condition caused it. Conditional rules (Frightened only applies while the source is in sight) are shown as a warning and left to you. Advantage and disadvantage cancel to a straight roll, as they should. Auto-failing saves (Paralyzed, Stunned, Petrified, Unconscious on Str/Dex) are called out.
+- **Ability checks are now a real thing.** The number on each ability box is your ability *check* modifier — what tapping actually rolls — with the plain modifier shown beside the score as `13 (+1)` whenever they differ. Damage, spell DCs and attack rolls still use the plain modifier. There's a new **check.\*** effect target, so a feature or item can grant "+2 to all ability checks" or "+1 to Dexterity checks", and ⓘ Breakdown explains every ability check.
+- **Armour you're too weak for** costs 10 ft of speed (RAW), named in the speed breakdown. A Belt of Giant Strength that lifts you to the requirement removes the penalty automatically.
+- **Stealth-disadvantage armour** is tagged on the Stealth row and warns when you roll it.
+- **🎒 Variant encumbrance** (optional, per character): Str×5 = encumbered (−10 ft), Str×10 = heavily encumbered (−20 ft). Off by default; the thresholds are always shown so you know where you stand.
+- **Death saves** are rolled and read for you — natural 20 puts you back on 1 HP, natural 1 counts as two failures, DC 10 otherwise — but you tap **Record it** to commit, so the dots stay yours to correct. 2024 exhaustion applies to the roll.
+- **Multiclass spell capacity** lists one allowance per casting class instead of silently reporting only the first.
+
 ## Get it on your phone (one-time setup, ~10 minutes)
 
 The app must be served over HTTPS to install. Easiest free way: **GitHub Pages**.
@@ -80,6 +94,14 @@ python -m http.server 8080
 ```
 
 Open http://localhost:8080. (Opening `index.html` directly also works, minus offline caching.)
+
+### Self-tests
+
+Open `http://localhost:8080/index.html?selftest=1` — the app runs its built-in regression
+suite (dice, formulas, AC, spell slots, rests, damage & concentration, save-file migration)
+and shows a pass/fail report over the app. It never touches localStorage and restores your
+characters when it finishes; without the `?selftest=1` flag it does nothing at all.
+Run it after every change, and add a check whenever you fix a bug.
 
 ## Your data
 
