@@ -54,6 +54,14 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.5 — tidier feature list, simpler grant editing
+
+- **🙈 Hide a feature** you're done reading. It drops into a collapsed **Hidden** section at the bottom of the Features tab — but it keeps working: bonuses, resistances, limited uses and grants all stay live. This is about clutter, not about switching something off. Pinning (⭐) and hiding are opposites: doing one clears the other.
+- **Granting spells is its own menu now.** Instead of a comma-separated text box, ＋ Add spell opens a searchable picker over the SRD library, and what you've chosen shows as a tidy list you can remove from.
+- **Custom granted spells.** A spell that isn't in the SRD can be written out in full — name, level, school, casting time, range, components, duration, concentration, ritual, description, at-higher-levels — and it's stored inside the feature itself, so it travels with it and needs no library. It lands on the Spells tab with its real details instead of a "fill in later" placeholder.
+- **Describing a creature is its own menu too.** ＋ Add creature opens a proper statblock form (type, AC, HP, speed, initiative, concentration, notes, and attacks as name / to-hit / damage rows) rather than eight boxes squeezed onto one line.
+- Half-finished feature edits survive opening those menus — type a name, go pick a spell, come back, and everything you'd written is still there.
+
 ### New in v1.4 — allies, grants, and things that stay in sight
 
 - **🐾 Allies tab** (between Spells and Items). Companions, familiars, summons and Wild Shape forms are no longer a collapsed card at the bottom of Main — they have their own tab, grouped by type, each with its own HP bar, AC, initiative and attack rolls.

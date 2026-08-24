@@ -740,6 +740,7 @@ function rollExpr(expr){ /* "2d6+3" etc */
 const STORE_KEY="grimoire_v1";
 let db={characters:[],currentId:null};
 let curTab="main";
+let hiddenOpen=false; /* 🙈 Hidden features section on the Features tab */
 let defsOpen=false; /* Resistances & Immunities toggle on Main */
 let detOpen=false; /* Details & flavour toggle on Main */
 let _saveFailed=false;
@@ -839,9 +840,10 @@ function migrate(c){ /* upgrade older saves in place — must survive partial, o
   c.updated=+c.updated||Date.now();
   /* per-entry upgrades */
   c.features.forEach(f=>{
-    f.fav=!!f.fav;
+    f.fav=!!f.fav;f.hidden=!!f.hidden;
+    if(f.hidden)f.fav=false;
     if(f.grants){
-      f.grants.spells=_arr(f.grants.spells,[]).filter(x=>typeof x==="string"&&x.trim());
+      f.grants.spells=_arr(f.grants.spells,[]).filter(x=>typeof x==="string"?x.trim():(x&&x.name));
       f.grants.summons=_arr(f.grants.summons,[]).filter(x=>x&&x.name);
       if(!f.grants.spells.length&&!f.grants.summons.length)delete f.grants;}
     if(f.uses&&!f.recharge)f.recharge="long";
@@ -2779,18 +2781,22 @@ function featLi(c,f,i){const mx=maxUses(c,f);const kind=featKind(f);
     ${mx>0?`<button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>
     <button class="iconbtn" title="Undo use" onclick="event.stopPropagation();undoFeature(${i})">↩</button>`:""}
     <button class="iconbtn" title="${f.fav?"Unpin from the top":"Pin to the top"}" onclick="event.stopPropagation();toggleFav(${i})">${f.fav?"⭐":"☆"}</button>
+    <button class="iconbtn" title="${f.hidden?"Show in the list again":"Hide from the list (bonuses keep working)"}" onclick="event.stopPropagation();toggleHidden(${i})">${f.hidden?"👁":"🙈"}</button>
     <button class="iconbtn" onclick="event.stopPropagation();editFeature(${i})">✏️</button></div>
    <div class="li-body">
     ${(f.effects||[]).length?`<p class="dim">Bonuses: ${f.effects.map(fxLabel).join(", ")} — applied automatically.</p>`:""}
-    ${(g.spells||[]).length?`<div class="row" style="margin:8px 0"><span style="flex:1" class="dim">✨ Grants: ${g.spells.map(esc).join(", ")}</span>
+    ${(g.spells||[]).length?`<div class="row" style="margin:8px 0"><span style="flex:1" class="dim">✨ Grants: ${g.spells.map(x=>esc(gsName(x))+(gsCustom(x)?" (custom)":"")).join(", ")}</span>
       <button class="btn ghost small" style="flex:none" onclick="grantSpells(${i})">Add to Spells</button></div>`:""}
     ${(g.summons||[]).map((t,j)=>`<div class="row" style="margin:8px 0"><span style="flex:1" class="dim">${COMP_KINDS[t.kind]?COMP_KINDS[t.kind].ic:"🐾"} ${esc(t.name)} — AC ${+t.ac||10} · ${+t.hpMax||1} HP · Speed ${+t.speed||30}${t.conc?" · 🧠 concentration":""}</span>
       <button class="btn ghost small" style="flex:none" onclick="summonFromFeature(${i},${j})">Summon</button></div>`).join("")}
     <p>${esc(f.desc||"").replace(/\n+/g,"</p><p>")}</p></div></div>`;}
 function renderFeat(){const c=cur();
   const _open=openKeys();
-  const fav=[],act=[],pas=[];
-  c.features.forEach((f,i)=>{if(f.fav)fav.push([f,i]);else (isActiveFeat(f)?act:pas).push([f,i]);});
+  const fav=[],act=[],pas=[],hid=[];
+  c.features.forEach((f,i)=>{
+    if(f.hidden)hid.push([f,i]);
+    else if(f.fav)fav.push([f,i]);
+    else (isActiveFeat(f)?act:pas).push([f,i]);});
   const list=arr=>arr.map(([f,i])=>featLi(c,f,i)).join("");
   $("#scr-feat").innerHTML=`
   <div class="card">
@@ -2803,7 +2809,10 @@ function renderFeat(){const c=cur();
       ${fav.length?`<div class="dim" style="margin:6px 0;font-weight:700;letter-spacing:.05em;color:var(--gold)">⭐ PINNED — always on top</div>`+list(fav):""}
       ${act.length?`<div class="dim" style="margin:${fav.length?"14px":"6px"} 0 6px;font-weight:700;letter-spacing:.05em">⚡ ACTIVE — actions, limited uses</div>`+list(act):""}
       ${pas.length?`<div class="dim" style="margin:14px 0 6px;font-weight:700;letter-spacing:.05em">🧬 PASSIVE — always on</div>`+list(pas):""}
-      ${fav.length?'<div class="dim" style="margin-top:10px">☆ on any feature pins it to the top of this list.</div>':""}`
+      ${hid.length?`<div class="section-head" style="margin:16px 0 6px;cursor:pointer" onclick="hiddenOpen=!hiddenOpen;renderTab()">
+        <div class="dim" style="font-weight:700;letter-spacing:.05em">${hiddenOpen?"▾":"▸"} 🙈 HIDDEN (${hid.length})</div>
+        <span class="dim">bonuses still apply</span></div>${hiddenOpen?list(hid):""}`:""}
+      <div class="dim" style="margin-top:10px">☆ pins a feature to the top · 🙈 tucks one you don't need to see (it keeps working).</div>`
      :'<div class="empty">No features yet — class features, racial traits, feats…</div>'}
   </div>
   <div class="card"><h2>Proficiencies & languages</h2>
@@ -2839,48 +2848,137 @@ function journalSave(i){const c=cur();
   i>=0?c.journal[i]=j:c.journal.unshift(j);
   touch();closeModal();renderTab();}
 /* ---- what a feature hands you: spells and creatures ---- */
-function attacksToText(list){return (list||[]).map(a=>`${a.name} ${fmt(+a.hit||0)}${a.dmg?" "+a.dmg:""}`.trim()).join("; ");}
-function textToAttacks(t){return String(t||"").split(/[;\n]/).map(l=>l.trim()).filter(Boolean).map(l=>{
-  const m=/^(.+?)\s+([+-]\d+)(?:\s+(.*))?$/.exec(l);
-  return m?{name:m[1].trim(),hit:+m[2],dmg:(m[3]||"").trim()}:{name:l,hit:0,dmg:""};});}
-function grantSummonRow(g){g=g||{};
-  return `<div class="row gsrow" style="margin-bottom:10px;flex-wrap:wrap;align-items:flex-start">
-  <input class="gsN" style="flex:2 1 140px" placeholder="Creature name" value="${esc(g.name||"")}">
-  <select class="gsK" style="flex:1 1 120px">${COMP_ORDER.map(k=>`<option value="${k}" ${(g.kind||"summon")===k?"selected":""}>${COMP_KINDS[k].ic} ${COMP_KINDS[k].one}</option>`).join("")}</select>
-  <button class="iconbtn" style="flex:none" onclick="this.parentElement.remove()">✕</button>
-  <input class="gsA" type="number" style="flex:1 1 60px" placeholder="AC" value="${g.ac!=null?g.ac:""}">
-  <input class="gsH" type="number" style="flex:1 1 60px" placeholder="HP" value="${g.hpMax!=null?g.hpMax:""}">
-  <input class="gsS" type="number" style="flex:1 1 60px" placeholder="Speed" value="${g.speed!=null?g.speed:""}">
-  <input class="gsI" type="number" style="flex:1 1 60px" placeholder="Init" value="${g.init!=null?g.init:""}">
-  <label style="flex:none;display:flex;align-items:center;gap:4px;text-transform:none;font-size:13px;margin:0;padding-top:8px"><input type="checkbox" class="gsC" ${g.conc?"checked":""}> 🧠 conc.</label>
-  <input class="gsT" style="flex:1 1 100%" placeholder="Attacks, one per line or ; separated — e.g. Bite +5 1d6+3" value="${esc(attacksToText(g.attacks))}">
-  </div>`;}
-function grantsCollect(){
-  const el=$("#ft_grantSpells");
-  const spells=String((el&&el.value)||"").split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
-  const summons=$$("#gsList .gsrow").map(r=>({
-    name:r.querySelector(".gsN").value.trim(),
-    kind:r.querySelector(".gsK").value,
-    ac:+r.querySelector(".gsA").value||10,
-    hpMax:Math.max(1,+r.querySelector(".gsH").value||1),
-    speed:+r.querySelector(".gsS").value||30,
-    init:+r.querySelector(".gsI").value||0,
-    conc:r.querySelector(".gsC").checked,
-    attacks:textToAttacks(r.querySelector(".gsT").value)})).filter(g=>g.name);
-  return (spells.length||summons.length)?{spells,summons}:undefined;}
+/* A granted spell is either a name (looked up in the SRD library) or a full custom
+   definition written here. These two helpers are the only places that need to know. */
+const gsName=x=>typeof x==="string"?x:((x&&x.name)||"");
+const gsCustom=x=>!!(x&&typeof x==="object");
+/* The feature editor keeps its half-finished state in a draft, so opening a sub-menu
+   (pick a spell, describe a creature) never loses what you had typed. */
+let _ftDraft=null;
+function ftCapture(){ /* pull the open editor's fields back into the draft */
+  if(!_ftDraft||!$("#ft_name"))return;
+  _ftDraft.name=$("#ft_name").value;
+  _ftDraft.uses=$("#ft_uses").value;
+  _ftDraft.recharge=$("#ft_recharge").value;
+  _ftDraft.kind=$("#ft_kind").value;
+  _ftDraft.slotCast=$("#ft_slot").checked;
+  _ftDraft.effects=fxCollect();
+  _ftDraft.desc=$("#ft_desc").value;}
+const ftBack=()=>`<button class="iconbtn" title="Back to the feature" onclick="editFeature(_ftDraft.i,true)">↩</button>`;
+/* ---- sub-menu: granted spells ---- */
+let _ftSpellQ="";
+function ftPickSpell(){ftCapture();_ftSpellQ="";
+  const lib=spellsFor(cur());
+  openModal(`<h2>Add a granted spell ${ftBack()}</h2>
+   <p class="dim">Pick from the SRD library, or write a spell that isn't in it. Granted spells are added to the Spells tab as always prepared.</p>
+   ${lib?`<div class="searchwrap"><input id="ftsq" placeholder="🔍 Search ${lib.length} spells…" oninput="_ftSpellQ=this.value;debounced(renderFtSpellPick)"></div>`
+        :'<div class="empty" style="padding:10px">The SRD library isn\'t downloaded, so there is nothing to search. You can still write the spell out below.</div>'}
+   <div id="ftSpellList"></div>
+   <hr>
+   <button class="btn ghost" style="width:100%" onclick="ftCustomSpell(-1)">✎ Write a custom spell</button>
+   <div class="spacer"></div>
+   <button class="btn" style="width:100%" onclick="editFeature(_ftDraft.i,true)">Done</button>`);
+  renderFtSpellPick();}
+function renderFtSpellPick(){
+  const el=$("#ftSpellList");if(!el)return;
+  const lib=spellsFor(cur())||[];
+  const q=_ftSpellQ.toLowerCase();
+  const have=new Set((_ftDraft.grants.spells||[]).map(x=>gsName(x).toLowerCase()));
+  const list=lib.filter(x=>!q||x.name.toLowerCase().includes(q))
+    .sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).slice(0,120);
+  el.innerHTML=list.length?list.map(x=>{const on=have.has(x.name.toLowerCase());
+    return `<div class="skrow"><div class="nm" style="font-size:14px">${esc(x.name)}
+      <span class="dim">${x.level===0?"cantrip":"level "+x.level}${x.conc?" · concentration":""}</span></div>
+      <button class="btn ${on?"ghost":""} small" style="flex:none" ${on?"disabled":""} onclick="ftAddSpell('${jstr(x.name)}')">${on?"✓ added":"Add"}</button></div>`;}).join("")
+   :(q?'<div class="empty" style="padding:10px">No match — use “Write a custom spell” below.</div>':"");}
+function ftAddSpell(name){
+  _ftDraft.grants.spells=_ftDraft.grants.spells||[];
+  if(!_ftDraft.grants.spells.some(x=>gsName(x).toLowerCase()===name.toLowerCase()))
+    _ftDraft.grants.spells.push(name);
+  renderFtSpellPick();toast("✨ "+esc(name)+" added to this feature");}
+function ftRemoveSpell(j){ftCapture();_ftDraft.grants.spells.splice(j,1);editFeature(_ftDraft.i,true);}
+function ftCustomSpell(j){ftCapture();
+  const s=j>=0&&gsCustom(_ftDraft.grants.spells[j])?_ftDraft.grants.spells[j]
+    :{name:j>=0?gsName(_ftDraft.grants.spells[j]):"",level:1,school:"",time:"1 action",range:"",
+      components:"V, S",duration:"",conc:false,ritual:false,desc:"",higher:""};
+  openModal(`<h2>${j>=0?"Edit":"Custom"} spell ${ftBack()}</h2>
+   <p class="dim">Written into the feature itself, so it travels with it — no SRD library needed.</p>
+   <label>Name</label><input id="fcs_name" value="${esc(s.name)}"><div class="spacer"></div>
+   <div class="grid3">
+    <div><label>Level</label><select id="fcs_lv">${[0,1,2,3,4,5,6,7,8,9].map(l=>`<option value="${l}" ${s.level===l?"selected":""}>${l===0?"Cantrip":l}</option>`).join("")}</select></div>
+    <div><label>School</label><input id="fcs_school" value="${esc(s.school||"")}"></div>
+    <div><label>Casting time</label><input id="fcs_time" value="${esc(s.time||"")}"></div></div>
+   <div class="spacer"></div>
+   <div class="grid3">
+    <div><label>Range</label><input id="fcs_range" value="${esc(s.range||"")}"></div>
+    <div><label>Components</label><input id="fcs_comp" value="${esc(s.components||"")}"></div>
+    <div><label>Duration</label><input id="fcs_dur" value="${esc(s.duration||"")}"></div></div>
+   <div class="spacer"></div>
+   <div class="row">
+    <label style="display:flex;align-items:center;gap:6px;text-transform:none"><input type="checkbox" id="fcs_conc" ${s.conc?"checked":""}> Concentration</label>
+    <label style="display:flex;align-items:center;gap:6px;text-transform:none"><input type="checkbox" id="fcs_rit" ${s.ritual?"checked":""}> Ritual</label></div>
+   <div class="spacer"></div><label>Description</label><textarea id="fcs_desc">${esc(s.desc||"")}</textarea>
+   <div class="spacer"></div><label>At higher levels</label><input id="fcs_higher" value="${esc(s.higher||"")}">
+   <div class="spacer"></div>
+   <button class="btn" style="width:100%" onclick="ftCustomSpellSave(${j})">Save spell</button>`);}
+function ftCustomSpellSave(j){
+  const s={name:$("#fcs_name").value.trim()||"Custom spell",level:+$("#fcs_lv").value,
+    school:$("#fcs_school").value.trim(),time:$("#fcs_time").value.trim(),range:$("#fcs_range").value.trim(),
+    components:$("#fcs_comp").value.trim(),duration:$("#fcs_dur").value.trim(),
+    conc:$("#fcs_conc").checked,ritual:$("#fcs_rit").checked,
+    desc:$("#fcs_desc").value,higher:$("#fcs_higher").value.trim()};
+  _ftDraft.grants.spells=_ftDraft.grants.spells||[];
+  if(j>=0)_ftDraft.grants.spells[j]=s;else _ftDraft.grants.spells.push(s);
+  editFeature(_ftDraft.i,true);toast("✨ "+esc(s.name)+" saved");}
+/* ---- sub-menu: granted creatures ---- */
+function ftEditSummon(j){ftCapture();
+  const g=j>=0?_ftDraft.grants.summons[j]:{name:"",kind:"summon",ac:12,hpMax:10,speed:30,init:0,conc:false,notes:"",attacks:[]};
+  openModal(`<h2>${j>=0?"Edit":"Add"} creature ${ftBack()}</h2>
+   <p class="dim">A statblock this feature can put on the 🐾 Allies tab, with its own HP, AC and attack rolls.</p>
+   <label>Name</label><input id="fsm_name" value="${esc(g.name||"")}" placeholder="Wolf / Fey Spirit / Brown Bear form"><div class="spacer"></div>
+   <label>Type</label><select id="fsm_kind">${COMP_ORDER.map(k=>`<option value="${k}" ${(g.kind||"summon")===k?"selected":""}>${COMP_KINDS[k].ic} ${COMP_KINDS[k].one} — ${COMP_KINDS[k].hint}</option>`).join("")}</select>
+   <div class="spacer"></div>
+   <div class="grid3">
+    <div><label>AC</label><input id="fsm_ac" type="number" value="${+g.ac||10}"></div>
+    <div><label>Max HP</label><input id="fsm_hp" type="number" value="${+g.hpMax||1}"></div>
+    <div><label>Speed</label><input id="fsm_speed" type="number" value="${+g.speed||30}"></div></div>
+   <div class="spacer"></div>
+   <div class="grid2">
+    <div><label>Initiative modifier</label><input id="fsm_init" type="number" value="${+g.init||0}"></div>
+    <div style="display:flex;align-items:flex-end;padding-bottom:4px"><label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:0">
+      <input type="checkbox" id="fsm_conc" ${g.conc?"checked":""}> Needs concentration</label></div></div>
+   <div class="spacer"></div><label>Notes (senses, traits…)</label><input id="fsm_notes" value="${esc(g.notes||"")}">
+   <div class="spacer"></div><label>Attacks — name / to-hit / damage</label>
+   <div id="compAtks">${(g.attacks&&g.attacks.length?g.attacks:[{}]).map(compAtkRow).join("")}</div>
+   <button class="btn ghost small" type="button" onclick="$('#compAtks').insertAdjacentHTML('beforeend',compAtkRow())">＋ Attack</button>
+   <div class="spacer"></div>
+   <button class="btn" style="width:100%" onclick="ftSummonSave(${j})">Save creature</button>`);}
+function ftSummonSave(j){
+  const attacks=$$("#compAtks .compatk").map(r=>({name:r.querySelector(".caN").value.trim(),
+    hit:+r.querySelector(".caH").value||0,dmg:r.querySelector(".caD").value.trim()})).filter(a=>a.name);
+  const g={name:$("#fsm_name").value.trim()||"Creature",kind:$("#fsm_kind").value,
+    ac:+$("#fsm_ac").value||10,hpMax:Math.max(1,+$("#fsm_hp").value||1),
+    speed:+$("#fsm_speed").value||30,init:+$("#fsm_init").value||0,
+    conc:$("#fsm_conc").checked,notes:$("#fsm_notes").value.trim(),attacks};
+  _ftDraft.grants.summons=_ftDraft.grants.summons||[];
+  if(j>=0)_ftDraft.grants.summons[j]=g;else _ftDraft.grants.summons.push(g);
+  editFeature(_ftDraft.i,true);toast("🐾 "+esc(g.name)+" saved");}
+function ftRemoveSummon(j){ftCapture();_ftDraft.grants.summons.splice(j,1);editFeature(_ftDraft.i,true);}
 function grantSpells(i){const c=cur();const f=c.features[i];if(!f)return;
   const names=((f.grants||{}).spells)||[];
   const lib=spellsFor(c)||[];
   let added=0,stub=0;
-  names.forEach(nm=>{
+  names.forEach(entry=>{
+    const nm=gsName(entry);if(!nm)return;
     if(c.spellcasting.spells.some(x=>String(x.name).toLowerCase()===nm.toLowerCase()))return;
-    const s=lib.find(x=>String(x.name).toLowerCase()===nm.toLowerCase());
-    if(s)c.spellcasting.spells.push({name:s.name,level:s.level,school:s.school,time:s.time,range:s.range,
-      components:s.components,duration:s.duration,conc:s.conc,ritual:s.ritual,desc:s.desc,higher:s.higher,
-      prepared:true,always:true,fromFeature:f.name,source:"srd"}),added++;
-    else c.spellcasting.spells.push({name:nm,level:1,school:"",time:"",range:"",components:"",duration:"",
+    const base=gsCustom(entry)?entry:lib.find(x=>String(x.name).toLowerCase()===nm.toLowerCase());
+    if(base){c.spellcasting.spells.push({name:base.name,level:+base.level||0,school:base.school||"",
+      time:base.time||"",range:base.range||"",components:base.components||"",duration:base.duration||"",
+      conc:!!base.conc,ritual:!!base.ritual,desc:base.desc||"",higher:base.higher||"",
+      prepared:true,always:true,fromFeature:f.name,source:gsCustom(entry)?"custom":"srd"});added++;}
+    else{c.spellcasting.spells.push({name:nm,level:1,school:"",time:"",range:"",components:"",duration:"",
       conc:false,ritual:false,prepared:true,always:true,fromFeature:f.name,source:"custom",
-      desc:"Granted by "+f.name+". This spell isn't in the downloaded SRD library — tap ⋮ → Edit to fill in level and text."}),stub++;});
+      desc:"Granted by "+f.name+". This spell isn't in the downloaded SRD library — tap ⋮ → Edit to fill in level and text."});stub++;}});
   touch();renderTab();
   toast((added+stub)?`✨ ${added+stub} spell${added+stub>1?"s":""} added as always prepared${stub?` — ${stub} need${stub>1?"":"s"} details filled in`:""}`
     :"Those spells are already on your sheet");}
@@ -2897,8 +2995,14 @@ function summonFromFeature(i,j){const c=cur();const f=c.features[i];if(!f)return
   touch();renderTab();
   toast(COMP_KINDS[p.kind].ic+" "+esc(p.name)+" summoned — see 🐾 Allies"+(p.conc?" · 🧠 concentrating":""));}
 function toggleFav(i){const c=cur();const f=c.features[i];if(!f)return;
-  f.fav=!f.fav;touch();renderTab();
+  f.fav=!f.fav;if(f.fav)f.hidden=false;touch();renderTab();
   toast(f.fav?"⭐ "+esc(f.name)+" pinned to the top":"☆ "+esc(f.name)+" unpinned");}
+/* Hiding is about clutter, not about switching a feature off: a hidden feature keeps
+   granting its bonuses, uses and resistances — it just stops taking up the list. */
+function toggleHidden(i){const c=cur();const f=c.features[i];if(!f)return;
+  f.hidden=!f.hidden;if(f.hidden)f.fav=false;touch();renderTab();
+  toast(f.hidden?"🙈 "+esc(f.name)+" hidden — its bonuses still apply"
+                :"👁 "+esc(f.name)+" back in the list");}
 function deleteFeature(i){const c=cur();const f=c.features[i];if(!f)return;
   const sp=c.spellcasting.spells.filter(x=>x.fromFeature===f.name);
   const co=(c.companions||[]).filter(x=>x.src===f.name);
@@ -2915,8 +3019,14 @@ function useFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f)
 function undoFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
   if((f.usesLeft??mx)>=mx){toast("Already at full uses");return;}
   f.usesLeft=Math.min(mx,(f.usesLeft??mx)+1);touch();renderTab();toast("↩ "+esc(f.name)+": "+f.usesLeft+"/"+mx);}
-function editFeature(i){const c=cur();
-  const f=i>=0?c.features[i]:{name:"",desc:"",uses:0,recharge:"long",effects:[],kind:"",slotCast:false};
+function editFeature(i,keepDraft){const c=cur();
+  if(!keepDraft||!_ftDraft||_ftDraft.i!==i){
+    const src=i>=0?c.features[i]:{name:"",desc:"",uses:0,recharge:"long",effects:[],kind:"",slotCast:false};
+    _ftDraft={i,name:src.name,uses:src.uses||0,recharge:src.recharge||"long",kind:src.kind||"",
+      slotCast:!!src.slotCast,effects:JSON.parse(JSON.stringify(src.effects||[])),desc:src.desc||"",
+      grants:{spells:[...(((src.grants||{}).spells)||[])],
+              summons:JSON.parse(JSON.stringify(((src.grants||{}).summons)||[]))}};}
+  const f=_ftDraft;
   const mx=maxUses(c,f);
   openModal(`<h2>${i>=0?"Edit":"New"} feature ${XBTN}</h2>
    <label>Name</label><input id="ft_name" value="${esc(f.name)}"><div class="spacer"></div>
@@ -2941,14 +3051,23 @@ function editFeature(i){const c=cur();
    </div><div class="spacer"></div>
    ${fxEditor(f.effects)}
    <hr><h3>Grants</h3>
-   <p class="dim">What this feature hands you. Spells are added to the Spells tab as <b>always prepared</b>; creatures appear on the 🐾 Allies tab with their own HP and attack rolls.</p>
-   <label>Spells granted — comma or line separated</label>
-   <input id="ft_grantSpells" list="srdSpellNames" placeholder="e.g. Misty Step, Moonbeam" value="${esc(((f.grants||{}).spells||[]).join(", "))}">
-   <datalist id="srdSpellNames">${(spellsFor(c)||[]).slice(0,900).map(x=>`<option value="${esc(x.name)}">`).join("")}</datalist>
+   <p class="dim">What this feature hands you. Spells go to the Spells tab as <b>always prepared</b>; creatures appear on the 🐾 Allies tab with their own HP and attack rolls.</p>
+   <label>Spells (${(f.grants.spells||[]).length})</label>
+   ${(f.grants.spells||[]).length?(f.grants.spells||[]).map((sp,j)=>`<div class="row" style="margin-bottom:6px;align-items:center">
+     <span style="flex:1">✨ ${esc(gsName(sp))}${gsCustom(sp)?` <span class="tag" style="color:var(--gold);border-color:var(--gold)">custom · ${sp.level===0?"cantrip":"lv "+sp.level}</span>`:""}</span>
+     ${gsCustom(sp)?`<button class="iconbtn" style="flex:none" title="Edit this custom spell" onclick="ftCustomSpell(${j})">✏️</button>`:""}
+     <button class="iconbtn" style="flex:none" onclick="ftRemoveSpell(${j})">✕</button></div>`).join("")
+    :'<div class="dim" style="margin-bottom:6px">None yet.</div>'}
+   <button class="btn ghost small" type="button" onclick="ftPickSpell()">＋ Add spell</button>
    <div class="spacer"></div>
-   <label>Creatures this feature can summon</label>
-   <div id="gsList">${((f.grants||{}).summons||[]).map(grantSummonRow).join("")}</div>
-   <button class="btn ghost small" type="button" onclick="$('#gsList').insertAdjacentHTML('beforeend',grantSummonRow())">＋ Add creature</button>
+   <label>Creatures (${(f.grants.summons||[]).length})</label>
+   ${(f.grants.summons||[]).length?(f.grants.summons||[]).map((g,j)=>`<div class="row" style="margin-bottom:6px;align-items:center">
+     <span style="flex:1">${COMP_KINDS[g.kind]?COMP_KINDS[g.kind].ic:"🐾"} ${esc(g.name)}
+       <span class="dim">AC ${+g.ac||10} · ${+g.hpMax||1} HP${g.conc?" · 🧠":""}${(g.attacks||[]).length?" · "+g.attacks.length+" attack"+(g.attacks.length>1?"s":""):""}</span></span>
+     <button class="iconbtn" style="flex:none" onclick="ftEditSummon(${j})">✏️</button>
+     <button class="iconbtn" style="flex:none" onclick="ftRemoveSummon(${j})">✕</button></div>`).join("")
+    :'<div class="dim" style="margin-bottom:6px">None yet.</div>'}
+   <button class="btn ghost small" type="button" onclick="ftEditSummon(-1)">＋ Add creature</button>
    <div class="spacer"></div>
    <label>Description</label><textarea id="ft_desc">${esc(f.desc)}</textarea><div class="spacer"></div>
    <div class="row">
@@ -2960,16 +3079,21 @@ function saveFeature(i){const c=cur();
     uses:raw===""||raw==="0"?0:(/^\d+$/.test(raw)?+raw:raw),
     recharge:$("#ft_recharge").value,desc:$("#ft_desc").value,
     kind:$("#ft_kind").value||undefined,slotCast:$("#ft_slot").checked||undefined,
-    effects:fxCollect(),grants:grantsCollect()};
+    effects:fxCollect(),
+    grants:((_ftDraft&&_ftDraft.grants&&((_ftDraft.grants.spells||[]).length||(_ftDraft.grants.summons||[]).length))
+      ?{spells:[..._ftDraft.grants.spells],summons:JSON.parse(JSON.stringify(_ftDraft.grants.summons))}:undefined)};
   if(i>=0){const old=c.features[i]; /* keep class-feature identity so resync doesn't duplicate */
     if(old.fid){f.fid=old.fid;f.cls=old.cls;f.minLv=old.minLv;f.source=old.source;}
     if(old.fav)f.fav=true; /* a pin survives editing */
+    if(old.hidden)f.hidden=true;
     if(old.source==="feat")f.source="feat";
     f.fxEdited=true;
     if(old.ph&&f.desc!==PH_TEXT)f.ph=undefined;else if(old.ph)f.ph=true;}
   const mx=maxUses(c,f);
   if(mx)f.usesLeft=i>=0?Math.min(c.features[i].usesLeft??mx,mx):mx;
-  i>=0?c.features[i]=f:c.features.push(f);touch();closeModal();renderTab();}
+  i>=0?c.features[i]=f:c.features.push(f);
+  _ftDraft=null;
+  touch();closeModal();renderTab();}
 /* ---- modal queue (level-up flow) ---- */
 const _mq=[];
 function qPush(fn){_mq.push(fn);}
@@ -3932,12 +4056,6 @@ function runSelfTests(){
     summonFromFeature(0,0);
     eq(c.concentration,"Fey Spirit");
     eq(c.companions[0].conc,true);});
-  t("attack shorthand round-trips",()=>{
-    const a=textToAttacks("Bite +5 1d6+3; Claw +4 1d4+2\nSlam -1");
-    eq(a.length,3);
-    eq(JSON.stringify(a[0]),JSON.stringify({name:"Bite",hit:5,dmg:"1d6+3"}));
-    eq(a[2].hit,-1);eq(a[2].dmg,"");
-    eq(textToAttacks(attacksToText(a)).length,3,"survives a round trip");});
   t("deleting a feature offers to take its grants with it",()=>{
     const c=mk(x=>{x.features.push({name:"Find Familiar",effects:[],grants:{spells:[],summons:[
       {name:"Owl",kind:"familiar",ac:11,hpMax:1,speed:5,conc:false,attacks:[]}]}});});
@@ -3989,6 +4107,139 @@ function runSelfTests(){
     document.querySelector(sel).classList.remove("open");
     renderFeat();
     ok(!document.querySelector(sel).classList.contains("open"),"and a closed card stays closed");});
+
+
+  /* ---- hiding a feature you're done reading ---- */
+  t("hiding moves a feature out of the list but keeps it working",()=>{
+    const c=mk(x=>{x.classes[0].level=5;x.abilities.cha=16;
+      x.features.push({name:"Aura of Protection",effects:[{t:"save.all",v:"max(1,cha)"}]});});
+    const before=saveMod(c,"dex");
+    toggleHidden(0);
+    eq(c.features[0].hidden,true);
+    eq(saveMod(c,"dex"),before,"a hidden feature still grants its bonus");
+    renderFeat();
+    const html=document.getElementById("scr-feat").innerHTML;
+    ok(/HIDDEN \(1\)/.test(html),"counted in its own section");
+    ok(!/PASSIVE/.test(html),"and gone from the passive list");});
+  t("hidden features keep their uses and grants",()=>{
+    const c=mk(x=>{x.features.push({name:"Second Wind",uses:1,recharge:"short",usesLeft:0,hidden:true,effects:[]});});
+    shortRest();
+    eq(c.features[0].usesLeft,1,"a rest still recharges it");});
+  t("pinning and hiding are mutually exclusive",()=>{
+    const c=mk(x=>{x.features.push({name:"Darkvision",effects:[]});});
+    toggleFav(0);eq(c.features[0].fav,true);
+    toggleHidden(0);
+    eq(c.features[0].hidden,true);eq(c.features[0].fav,false,"hiding un-pins");
+    toggleFav(0);
+    eq(c.features[0].fav,true);eq(c.features[0].hidden,false,"pinning un-hides");});
+  t("hidden features reveal on demand and survive editing",()=>{
+    const c=mk(x=>{x.features.push({name:"Druidic",desc:"secret language",hidden:true,effects:[]});});
+    hiddenOpen=false;renderFeat();
+    ok(!/Druidic/.test(document.getElementById("scr-feat").innerHTML),"collapsed by default");
+    hiddenOpen=true;renderFeat();
+    ok(/Druidic/.test(document.getElementById("scr-feat").innerHTML),"revealed when opened");
+    hiddenOpen=false;
+    openModal=real.openModal;
+    try{editFeature(0);saveFeature(0);}finally{real.closeModal();openModal=()=>{};}
+    eq(c.features[0].hidden,true,"still hidden after an edit");});
+
+  /* ---- the grants sub-menus ---- */
+  t("opening a sub-menu does not lose what you typed",()=>{
+    const keep=SRD.spells2014;
+    SRD.spells2014=[{name:"Misty Step",level:2,school:"conjuration",time:"1 bonus action",range:"Self",
+      components:"V",duration:"Instantaneous",conc:false,ritual:false,desc:"teleport",higher:"",classes:["Druid"]}];
+    const c=mk(x=>{x.edition="2014";x.features.push({name:"Old name",desc:"old desc",effects:[]});});
+    openModal=real.openModal;
+    try{
+      editFeature(0);
+      document.getElementById("ft_name").value="Conjure Woodland Beings";
+      document.getElementById("ft_desc").value="Summons fey creatures.";
+      ftPickSpell();                    /* the editor's DOM is replaced by the picker */
+      ftAddSpell("Misty Step");
+      editFeature(_ftDraft.i,true);     /* back */
+      eq(document.getElementById("ft_name").value,"Conjure Woodland Beings","the name you typed survived");
+      eq(document.getElementById("ft_desc").value,"Summons fey creatures.","so did the description");
+      ok(/Misty Step/.test(document.getElementById("modalBox").innerHTML),"and the spell is listed");
+      saveFeature(0);
+    }finally{real.closeModal();openModal=()=>{};SRD.spells2014=keep;}
+    eq(c.features[0].name,"Conjure Woodland Beings");
+    eq(gsName(c.features[0].grants.spells[0]),"Misty Step");});
+  t("removing a grant also keeps your typing",()=>{
+    const c=mk(x=>{x.features.push({name:"Boon",effects:[],grants:{spells:["A","B"],summons:[]}});});
+    openModal=real.openModal;
+    try{
+      editFeature(0);
+      document.getElementById("ft_name").value="Renamed boon";
+      ftRemoveSpell(0);
+      eq(document.getElementById("ft_name").value,"Renamed boon","name kept while the list re-drew");
+      eq(_ftDraft.grants.spells.length,1);
+      eq(gsName(_ftDraft.grants.spells[0]),"B","the right one was removed");
+    }finally{real.closeModal();openModal=()=>{};}});
+  t("a granted spell can be written by hand and keeps its details",()=>{
+    const c=mk(x=>{x.features.push({name:"Pact Boon",effects:[]});});
+    openModal=real.openModal;
+    try{
+      editFeature(0);
+      ftCustomSpell(-1);
+      document.getElementById("fcs_name").value="Thornwhip Surge";
+      document.getElementById("fcs_lv").value="3";
+      document.getElementById("fcs_desc").value="A lash of bramble.";
+      document.getElementById("fcs_conc").checked=true;
+      ftCustomSpellSave(-1);
+      saveFeature(0);
+    }finally{real.closeModal();openModal=()=>{};}
+    const sp=c.features[0].grants.spells[0];
+    eq(gsCustom(sp),true,"stored as a full definition, not a bare name");
+    eq(sp.level,3);eq(sp.conc,true);
+    grantSpells(0);
+    const on=c.spellcasting.spells[0];
+    eq(on.name,"Thornwhip Surge");eq(on.level,3,"lands with its real level");
+    eq(on.conc,true);eq(on.always,true);eq(on.fromFeature,"Pact Boon");
+    ok(!/isn't in the downloaded SRD/.test(on.desc),"not a fill-in stub");});
+  t("plain SRD names still work alongside custom ones",()=>{
+    const keep=SRD.spells2014;
+    SRD.spells2014=[{name:"Moonbeam",level:2,school:"evocation",time:"1 action",range:"120 ft",
+      components:"V,S,M",duration:"1 minute",conc:true,ritual:false,desc:"a beam",higher:"",classes:["Druid"]}];
+    try{
+      const c=mk(x=>{x.edition="2014";x.features.push({name:"Circle Spells",effects:[],
+        grants:{spells:["Moonbeam",{name:"Homebrew Bolt",level:1,conc:false,desc:"zap"}],summons:[]}});});
+      grantSpells(0);
+      eq(c.spellcasting.spells.length,2);
+      eq(c.spellcasting.spells.find(x=>x.name==="Moonbeam").level,2,"name resolved from the library");
+      eq(c.spellcasting.spells.find(x=>x.name==="Homebrew Bolt").level,1,"custom used as written");
+    }finally{SRD.spells2014=keep;}});
+  t("a creature is described in its own menu and lands intact",()=>{
+    const c=mk(x=>{x.features.push({name:"Find Familiar",effects:[]});});
+    openModal=real.openModal;
+    try{
+      editFeature(0);
+      ftEditSummon(-1);
+      document.getElementById("fsm_name").value="Pseudodragon";
+      document.getElementById("fsm_kind").value="familiar";
+      document.getElementById("fsm_ac").value="13";
+      document.getElementById("fsm_hp").value="7";
+      document.getElementById("fsm_init").value="2";
+      const row=document.querySelector("#compAtks .compatk");
+      row.querySelector(".caN").value="Sting";row.querySelector(".caH").value="4";row.querySelector(".caD").value="1d4+2";
+      ftSummonSave(-1);
+      saveFeature(0);
+    }finally{real.closeModal();openModal=()=>{};}
+    const g=c.features[0].grants.summons[0];
+    eq(g.name,"Pseudodragon");eq(g.kind,"familiar");eq(g.ac,13);eq(g.hpMax,7);eq(g.init,2);
+    eq(g.attacks[0].dmg,"1d4+2");
+    summonFromFeature(0,0);
+    eq(c.companions[0].name,"Pseudodragon");
+    eq(c.companions[0].attacks[0].hit,4);});
+  t("a feature with no grants stores none",()=>{
+    const c=mk(x=>{x.features.push({name:"Plain",effects:[]});});
+    openModal=real.openModal;
+    try{editFeature(0);saveFeature(0);}finally{real.closeModal();openModal=()=>{};}
+    eq(c.features[0].grants,undefined,"no empty grants object left behind");});
+  t("migrate accepts both grant shapes",()=>{
+    const c=migrate({name:"X",classes:[{name:"Druid",level:3}],
+      features:[{name:"F",grants:{spells:["Moonbeam",{name:"Custom",level:2},"",null,{}],summons:[{name:"Wolf"},null]}}]});
+    eq(c.features[0].grants.spells.length,2,"blank and malformed entries dropped");
+    eq(c.features[0].grants.summons.length,1);});
 
   /* ---- the status strip ---- */
   t("the status bar shows transient state and hides when there is none",()=>{
