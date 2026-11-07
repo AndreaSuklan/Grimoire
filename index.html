@@ -65,6 +65,7 @@ hr{border:none;border-top:1px solid var(--line);margin:12px 0}
 #statusbar .sb.cond{border-color:var(--red);color:var(--red)}
 #statusbar .sb.exh{border-color:var(--gold);color:var(--gold)}
 #statusbar .sb.conc{border-color:var(--accent2);color:var(--accent2)}
+#statusbar .sb.surge{border-color:var(--blue);color:var(--blue)}
 #nav button.on{color:var(--accent2)}
 
 /* Ability blocks */
@@ -111,6 +112,20 @@ hr{border:none;border-top:1px solid var(--line);margin:12px 0}
 .li .li-body{display:none;margin-top:10px;font-size:14px;color:var(--txt)}
 .li.open .li-body{display:block}
 .li .li-body p{margin:6px 0}
+/* Cards with a right-hand action column (Features, Items): Use/↩ sit top-right and pin/hide/edit in a row bottom-right, so the
+   title, action type and uses get the full width and can be read at a glance. */
+.li .li-head.rc{flex-wrap:nowrap;align-items:stretch;gap:10px}
+.li .rc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.li .rc-main .li-title{flex:none}
+.li .rc-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+.li .rc-top{display:flex;gap:6px;align-items:center}
+.li .rc-opts{display:flex;gap:5px;margin-top:auto}
+.iconbtn.sm{width:30px;height:30px;border-radius:8px;font-size:14px}
+.rc-meta{display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap}
+.kind-chip{font-size:13px;font-weight:600;border:1px solid var(--accent2);color:var(--accent2);border-radius:7px;padding:2px 8px;white-space:nowrap}
+.uses-txt{font-size:14px;color:var(--txt)}
+.uses-txt b{font-size:15px}
+
 .tag{font-size:10.5px;background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:2px 6px;color:var(--dim);white-space:nowrap}
 .tag.c{color:var(--gold);border-color:var(--gold)}
 .tag.r{color:var(--blue);border-color:var(--blue)}
@@ -382,7 +397,14 @@ const BUILTIN_SUBS=[
   {name:"Channel Divinity: Nature's Wrath",levels:[3],kindHint:"action",desc:"(Summary) Conjure spectral vines around nearby creatures: targets of your choice within 15 ft must succeed on a Strength saving throw against your spell save DC or be restrained for 1 minute (repeat save at end of turns)."},
   {name:"Aura of Warding",levels:[7],desc:"(Summary) You and allies in your aura have resistance to Necrotic, Psychic and Radiant damage.",fx:[{t:"custom.resist",v:"necrotic, psychic & radiant (aura)"}]},
   {name:"Undying Sentinel",levels:[15],uses:1,recharge:"long",kindHint:"passive",desc:"(Summary) When reduced to 0 HP but not killed outright, drop to 1 HP instead and regain HP equal to 3 × your paladin level (once per long rest). You don't suffer drawbacks of old age and can't be aged magically."},
-  {name:"Elder Champion",levels:[20],uses:1,recharge:"long",kindHint:"action",desc:"(Summary) Bonus action: transform for 1 minute — regain 10 HP at the start of your turns, cast paladin spells with a 1-action casting time as a bonus action, and enemies within your aura have disadvantage on saves against your spells and Channel Divinity (once per long rest, or expend a level 5 spell slot to restore)."}]}];
+  {name:"Elder Champion",levels:[20],uses:1,recharge:"long",kindHint:"action",desc:"(Summary) Bonus action: transform for 1 minute — regain 10 HP at the start of your turns, cast paladin spells with a 1-action casting time as a bonus action, and enemies within your aura have disadvantage on saves against your spells and Channel Divinity (once per long rest, or expend a level 5 spell slot to restore)."}]},
+ /* Path of Wild Magic (Tasha's Cauldron of Everything, 2014 only — the 2024 PHB does not reprint it). Summaries in our own words. */
+ {edition:"2014",class:"Barbarian",name:"Path of Wild Magic",features:[
+  {name:"Magic Awareness",levels:[3],uses:"prof",recharge:"long",kindHint:"action",desc:"(Summary) Action: open your awareness to magic. Until the end of your next turn you know the location of every spell and magic item within 60 ft that isn't behind total cover, and for any spell you sense you also learn its school of magic.\n\nUses: your proficiency bonus, all regained on a long rest."},
+  {name:"Wild Surge",levels:[3],fx:[],kindHint:"passive",desc:"(Summary) Whenever you enter your rage, roll a d8 on the Wild Magic table and its effect happens at once. If the effect calls for a saving throw, the DC is 8 + your proficiency bonus + your Constitution modifier.\n\nThe app rolls this for you when you rage (press Use on Rage, or turn on 😡 Rage in Active effects on Main) and shows the effect in the strip at the top until the rage ends.\n\nWILD MAGIC TABLE (d8)\n1. Shadowy tendrils: each creature of your choice you can see within 30 ft makes a Con save or takes 1d12 necrotic damage. You gain 1d12 temporary HP.\n2. Teleport up to 30 ft to an unoccupied space you can see. Until the rage ends, you can do it again as a bonus action on each of your turns.\n3. An intangible spirit that looks like a flumph or a pixie (your choice) appears within 5 ft of a creature you can see within 30 ft. At the end of the current turn it explodes: each creature within 5 ft of it makes a Dex save or takes 1d6 force damage. Until the rage ends, you can summon another as a bonus action on each of your turns.\n4. One weapon you're holding is infused: until the rage ends its damage becomes force and it gains the light and thrown properties (range 20/60 ft). If it leaves your hand, it reappears there at the end of the current turn.\n5. Until the rage ends, any creature that hits you with an attack roll takes 1d6 force damage.\n6. Protective lights: until the rage ends you have +1 AC, and allies within 10 ft of you get the same bonus.\n7. Flowers and vines: until the rage ends, the ground within 15 ft of you is difficult terrain for your enemies.\n8. A bolt of light from your chest: another creature you can see within 30 ft makes a Con save or takes 1d6 radiant damage and is blinded until the start of your next turn. Until the rage ends, you can do it again as a bonus action on each of your turns."},
+  {name:"Bolstering Magic",levels:[6],uses:"prof",recharge:"long",kindHint:"action",desc:"(Summary) Action: touch one creature (it can be you) and choose one benefit:\n• For 10 minutes, whenever it makes an attack roll or an ability check, it can roll a d3 and add the result to the d20.\n• Roll a d3: the creature regains one expended spell slot of that level or lower (its choice). A creature that receives this benefit can't receive it again until it finishes a long rest.\n\nUses: your proficiency bonus, all regained on a long rest."},
+  {name:"Unstable Backlash",levels:[10],fx:[],kindHint:"reaction",desc:"(Summary) While raging, immediately after you take damage or fail a saving throw, you can use your reaction to roll on the Wild Magic table and produce that effect at once. It replaces your current Wild Magic effect.\n\nIn the app: when you take damage while raging, the damage pop-up offers 🌀 Unstable Backlash; you can also reroll from the Wild Surge chip at the top."},
+  {name:"Controlled Surge",levels:[14],fx:[],kindHint:"passive",desc:"(Summary) Whenever you roll on the Wild Magic table, you can roll the die twice and choose which of the two effects to unleash. If both dice show the same number, you can ignore it and choose any effect on the table.\n\nThe app rolls twice automatically from level 14 and lets you pick."}]}];
 /* Oath spells auto-added as always-prepared (all SRD spells; 2014 lists, reused for 2024) */
 const SUBCLASS_SPELLS={
  "Paladin|ancients":{3:["Ensnaring Strike","Speak with Animals"],5:["Misty Step","Moonbeam"],9:["Plant Growth","Protection from Energy"],13:["Ice Storm","Stoneskin"],17:["Commune with Nature","Tree Stride"]},
@@ -824,6 +846,7 @@ function migrate(c){ /* upgrade older saves in place — must survive partial, o
   c.activeBuffs=_arr(c.activeBuffs,[]);
   c.customBuffs=_arr(c.customBuffs,[]).filter(b=>b&&b.name);
   if(c.concentration===undefined)c.concentration=null;
+  if(!c.wildSurge||typeof c.wildSurge!=="object"||!(+c.wildSurge.n>=1&&+c.wildSurge.n<=8))c.wildSurge=null;
   c.journal=_arr(c.journal,[]);
   c.companions=_arr(c.companions,[]).filter(p=>p&&p.name);
   c.companions.forEach(p=>{
@@ -914,6 +937,7 @@ function activeEffects(c){
   ((c.inventory||{}).items||[]).forEach(it=>{if(itemActive(it))(it.effects||[]).forEach(e=>add(it.name,e));});
   (c.activeBuffs||[]).forEach(bn=>{const b=allBuffs(c).find(x=>x.name===bn);
     if(b)(b.fx||[]).forEach(e=>add("🔆 "+b.name,e));});
+  {const ws=surgeNow(c);if(ws&&ws.n===6)add("💠 Wild Surge: protective lights",{t:"ac",v:1});}
   ruleEffects(c).forEach(e=>out.push(e)); /* rules the app applies for you — same pipeline, so they show in every ⓘ breakdown */
   return out;}
 /* Penalties that come from the rules rather than from a feature or an item. They are pushed
@@ -951,19 +975,94 @@ function armorStealthDis(c){const ar=equippedArmor(c);
 /* ---- temporary buffs ---- */
 function allBuffs(c){return [...BUFFS,...((c&&c.customBuffs)||[])];}
 function buffOn(c,name){return (c.activeBuffs||[]).includes(name);}
-function toggleBuff(name){const c=cur();
+/* Rage is both a limited-use feature (uses per long rest) and a buff (damage + resistance). Turning the
+   buff on spends a use; pressing Use on the feature turns the buff on. Either way it's one rage. */
+function rageFeature(c){return (c.features||[]).find(f=>/^rage$/i.test(String(f.name||"").trim())&&maxUses(c,f)>0)||null;}
+function toggleBuff(name,opts){const c=cur();opts=opts||{};
   c.activeBuffs=c.activeBuffs||[];
   const b=allBuffs(c).find(x=>x.name===name);
   if(buffOn(c,name)){
     c.activeBuffs=c.activeBuffs.filter(x=>x!==name);
     if(b&&b.conc&&c.concentration===name)c.concentration=null;
+    if(name==="Rage")c.wildSurge=null; /* the surge ends with the rage */
     toast("◻️ "+esc(name)+" off");}
   else{
     if(b&&b.conc&&concentrationBlocked(name))return;
+    let rageNote="";
+    if(name==="Rage"){const rf=rageFeature(c);
+      if(rf){const mx=maxUses(c,rf);const left=rf.usesLeft??mx;
+        if(!opts.spent){
+          if(left<=0&&!confirm("No rages left until a long rest. Turn Rage on anyway?"))return;
+          if(left>0)rf.usesLeft=left-1;}
+        rageNote=" · "+(rf.usesLeft??mx)+"/"+mx+" rages left";}}
     c.activeBuffs.push(name);
     if(b&&b.conc)setConcentration(name);
-    toast("🔆 "+esc(name)+" active"+(b&&b.note?" — "+esc(b.note):""));}
+    toast("🔆 "+esc(name)+" active"+(b&&b.note?" — "+esc(b.note):"")+rageNote);
+    if(name==="Rage"&&hasWildSurge(c)){c.wildSurge=null;touch();renderTab();rollWildSurge("rage");return;}}
   touch();renderTab();}
+/* ---- Wild Surge (Path of Wild Magic barbarian) ----
+   The surge lives in c.wildSurge = {n:1..8} but only counts while the Rage buff is on, so anything
+   that ends the rage (toggling it off, a long rest, an undo) also ends the surge without extra bookkeeping. */
+const WILD_SURGE=[
+ {n:1,ic:"🌑",name:"Shadowy tendrils",save:"Con",rolls:[["1d12 necrotic","1d12"]],temp:"1d12",
+  txt:"Each creature of your choice you can see within 30 ft makes a Constitution save or takes 1d12 necrotic damage. You gain 1d12 temporary HP."},
+ {n:2,ic:"🌀",name:"Teleport",bonus:true,
+  txt:"You teleport up to 30 ft to an unoccupied space you can see. Until the rage ends, you can do it again as a bonus action on each of your turns."},
+ {n:3,ic:"👻",name:"Exploding spirit",save:"Dex",bonus:true,rolls:[["1d6 force","1d6"]],
+  txt:"An intangible spirit that looks like a flumph or a pixie (your choice) appears within 5 ft of a creature you can see within 30 ft. At the end of the current turn it explodes: each creature within 5 ft of it makes a Dexterity save or takes 1d6 force damage. Until the rage ends, you can summon another as a bonus action on each of your turns."},
+ {n:4,ic:"🗡️",name:"Infused weapon",
+  txt:"One weapon you're holding is infused: until the rage ends its damage type becomes force and it gains the light and thrown properties (range 20/60 ft). If it leaves your hand, it reappears there at the end of the current turn."},
+ {n:5,ic:"⚡",name:"Retribution",rolls:[["1d6 force (to the attacker)","1d6"]],
+  txt:"Until the rage ends, any creature that hits you with an attack roll takes 1d6 force damage."},
+ {n:6,ic:"💠",name:"Protective lights",
+  txt:"Until the rage ends you have +1 AC (added to your sheet automatically), and allies within 10 ft of you get the same bonus."},
+ {n:7,ic:"🌿",name:"Flowers and vines",
+  txt:"Until the rage ends, the ground within 15 ft of you is difficult terrain for your enemies."},
+ {n:8,ic:"🔆",name:"Bolt of light",save:"Con",bonus:true,rolls:[["1d6 radiant","1d6"]],
+  txt:"Another creature you can see within 30 ft makes a Constitution save or takes 1d6 radiant damage and is blinded until the start of your next turn. Until the rage ends, you can do it again as a bonus action on each of your turns."}];
+function barbLevel(c){const k=(c.classes||[]).find(x=>x.name==="Barbarian");return k?(+k.level||0):0;}
+function hasWildSurge(c){return !!c&&(c.features||[]).some(f=>f.cls==="Barbarian"&&/^wild surge$/i.test(String(f.name||"").trim()));}
+function hasFeat(c,cls,name){return (c.features||[]).some(f=>f.cls===cls&&String(f.name||"").trim().toLowerCase()===name.toLowerCase());}
+function surgeDC(c){return 8+profBonus(c)+mod(abl(c,"con"));}
+function surgeNow(c){ /* the effect currently in play, or null */
+  if(!c||!buffOn(c,"Rage")||!c.wildSurge)return null;
+  return WILD_SURGE[(+c.wildSurge.n||0)-1]||null;}
+function rollWildSurge(why){const c=cur();if(!c)return;
+  const controlled=hasFeat(c,"Barbarian","Controlled Surge");
+  const a=rollDie(8);
+  if(!controlled){logRoll("Wild Surge",a,"d8 ["+a+"]");setSurge(a,why);return;}
+  const b=rollDie(8);
+  logRoll("Wild Surge (Controlled)",a,"d8 ["+a+", "+b+"]");
+  const opts=a===b?WILD_SURGE:[WILD_SURGE[a-1],WILD_SURGE[b-1]];
+  openModal(`<h2>🌀 ${why==="backlash"?"Unstable Backlash":"Wild Surge"} ${XBTN}</h2>
+   <p class="dim">Controlled Surge rolled ${a} and ${b}. ${a===b?"Doubles: choose <b>any</b> effect.":"Choose which one to unleash."}</p>
+   ${opts.map(s=>`<button class="li" style="display:block;width:100%;text-align:left" onclick="setSurge(${s.n},'${why||""}')">
+     <div style="font-weight:600">${s.n}. ${s.ic} ${esc(s.name)}</div><div class="li-sub" style="font-size:13px">${esc(s.txt)}</div></button>`).join("")}`);}
+function setSurge(n,why){const c=cur();if(!c)return;
+  if(!buffOn(c,"Rage")){toast("Wild Surge only lasts while you rage — turn on 😡 Rage first");return;}
+  c.wildSurge={n:+n};touch();renderTab();surgeInfo(why);}
+function surgeInfo(why){const c=cur();if(!c)return;
+  const s=surgeNow(c);
+  if(!s){ if(buffOn(c,"Rage")&&hasWildSurge(c)){rollWildSurge();return;}
+    toast("No Wild Surge in play — it starts when you enter your rage");return;}
+  const dc=surgeDC(c);
+  const backlash=hasFeat(c,"Barbarian","Unstable Backlash");
+  openModal(`<h2>${s.ic} Wild Surge: ${esc(s.name)} ${XBTN}</h2>
+   <p class="dim">${why==="backlash"?"Unstable Backlash — this replaces your previous effect. ":""}d8 result ${s.n} · lasts until your rage ends</p>
+   <p>${esc(s.txt)}</p>
+   ${s.save?`<p><b>${s.save} save DC ${dc}</b> <span class="dim">(8 + prof ${profBonus(c)} + Con ${fmt(mod(abl(c,"con")))})</span></p>`:""}
+   ${s.bonus?`<p class="dim">⚡ Repeatable as a bonus action on each of your turns while the rage lasts.</p>`:""}
+   <div class="row" style="flex-wrap:wrap;gap:6px">
+    ${(s.rolls||[]).map(r=>`<button class="btn ghost small" style="flex:none" onclick="damageRoll('Wild Surge: ${jstr(r[0])}','${r[1]}')">🎲 ${esc(r[0])}</button>`).join("")}
+    ${s.temp?`<button class="btn ghost small" style="flex:none" onclick="surgeTempHp()">🎲 Gain ${s.temp} temp HP</button>`:""}
+   </div>
+   ${backlash?`<hr><button class="btn ghost" style="width:100%" onclick="rollWildSurge('backlash')">🌀 Unstable Backlash — reroll (reaction)</button>
+     <p class="dim" style="margin-top:6px">Use it right after you take damage or fail a saving throw while raging.</p>`:""}`);}
+function surgeTempHp(){const c=cur();if(!c)return;
+  const r=rollExpr("1d12");logRoll("Wild Surge temp HP",r.total,r.detail);
+  /* temporary HP don't stack: keep whichever is higher */
+  const was=+c.hp.temp||0;c.hp.temp=Math.max(was,r.total);touch();renderTab();closeModal();
+  toast(`<div><b>Wild Surge temp HP</b></div>${bigHtml(r.total)}<div class="dim">${esc(r.detail)}${r.total>was?"":" — you keep your "+was+" temp HP (they don't stack)"}</div>`,5000);}
 /* What each condition does to YOUR OWN d20 rolls.
    `dis`/`adv` are listed only where the rule has no "if" clause — those pre-select the pill.
    `sug` is a conditional rule (Frightened needs the source in sight): warn, never decide. */
@@ -1280,6 +1379,9 @@ function renderStatusBar(){
     `<span class="sb cond" onclick="conditionsInfo()" title="${esc(CONDITION_TEXT[cd]||"")} — tap for the full rules">${esc(cd)}</span>`));
   if(c.exhaustion>0)bits.push(
     `<span class="sb exh" onclick="conditionsInfo()" title="${c.edition==="2024"?`${fmt(-2*c.exhaustion)} to every d20 test, ${fmt(-5*c.exhaustion)} ft speed`:"2014: a ladder of conditions — you are warned when you roll"}">😵 Exhaustion ${c.exhaustion}</span>`);
+  if(buffOn(c,"Rage")&&hasWildSurge(c)){const ws=surgeNow(c);bits.push(ws
+    ?`<span class="sb surge" onclick="surgeInfo()" title="Wild Surge in play — tap for details${hasFeat(c,"Barbarian","Unstable Backlash")?" or Unstable Backlash":""}">${ws.ic} ${esc(ws.name)}</span>`
+    :`<span class="sb surge" onclick="rollWildSurge()" title="You are raging but no Wild Surge has been rolled">🌀 Roll Wild Surge</span>`);}
   if(c.concentration)bits.push(
     `<span class="sb conc" onclick="dropConcentration()" title="tap to drop concentration">🧠 ${esc(c.concentration)} ✕</span>`);
   el.className=bits.length?"on":"";
@@ -1879,6 +1981,9 @@ function compCard(c,p,i){
     </div>
     ${pend?`<div class="row" style="margin-top:6px"><button class="btn small" onclick="commitHp()">Apply ${fmt(pend)}</button>
       <button class="btn ghost small" onclick="cancelHp()">Cancel</button></div>`:""}
+    <div class="row" style="margin-top:6px">
+      <button class="btn ghost small" onclick="compHpPrompt('${jstr(p.id)}',-1)">Damage…</button>
+      <button class="btn ghost small" onclick="compHpPrompt('${jstr(p.id)}',1)">Heal…</button></div>
     ${p.init!==undefined&&p.init!==""?`<div class="row" style="margin-top:6px"><button class="btn ghost small" onclick="d20Roll('${jstr(p.name)} initiative',${+p.init||0},'',{kind:'check',ab:'dex'})">🎲 Initiative ${fmt(+p.init||0)}</button></div>`:""}
     ${(p.attacks||[]).map(a=>`<div class="row" style="margin-top:6px">
       <span style="flex:1">${esc(a.name)}${a.dmg?` <span class="dim">${esc(a.dmg)}</span>`:""}</span>
@@ -2066,11 +2171,13 @@ function commitHp(){
     const hadConc=!!c.concentration;
     d<0?applyDamage(-d):applyHealing(d);
     const lost=hadConc&&!c.concentration;
+    /* Unstable Backlash: right after taking damage while raging */
+    const backlash=d<0&&c.hp.current>0&&buffOn(c,"Rage")&&hasFeat(c,"Barbarian","Unstable Backlash");
     toast(`<div><b>${d<0?"Damage":"Healing"} ${fmt(d)}</b></div>
       <div class="big">${c.hp.current}<span style="font-size:16px;color:var(--dim)"> / ${maxHP(c)}</span></div>
       ${c.hp.temp?`<div class="dim">+${c.hp.temp} temp HP left</div>`:""}
       ${lost?'<div class="dim">🧠 concentration ended</div>':""}
-      <div class="dice-adv"><button class="pill" onclick="undoHp()">↩ Undo</button></div>`,5000);}
+      <div class="dice-adv"><button class="pill" onclick="undoHp()">↩ Undo</button>${backlash?`<button class="pill" onclick="rollWildSurge('backlash')" title="reaction: reroll your Wild Surge">🌀 Unstable Backlash</button>`:""}</div>`,backlash?8000:5000);}
   else{
     const i=(c.companions||[]).findIndex(x=>x.id===t);
     if(i<0){renderTab();return;}
@@ -2091,9 +2198,21 @@ function undoHp(){const c=cur();const u=lastHpUndo;
     if(p){p.hpCur=u.hp;p.active=u.active;}
     c.concentration=u.conc;}
   touch();renderTab();toast("↩ Undone");}
+/* Damage… / Heal… for an ally: type an exact amount. It goes through the same commit as the ± buttons,
+   so the toast, ↩ Undo, 0-HP dismissal and concentration release all behave identically. */
+function compHpPrompt(id,sign){const c=cur();const p=c&&(c.companions||[]).find(x=>x.id===id);if(!p)return;
+  const v=prompt((sign<0?"Damage to ":"Healing for ")+p.name);if(v===null)return;
+  const n=Math.abs(Math.floor(+v||0));
+  if(!n){toast("Enter a whole number above 0");return;}
+  if(hpPending.t)commitHp(); /* land any ± taps first, so the typed amount is its own event */
+  tallyHp(id,sign*n);commitHp();}
+/* Damage… / Heal… for the character: same commit as the ± buttons (toast, ↩ Undo, concentration
+   check, Unstable Backlash offer) — and the same as the allies' version below. */
 function hpPrompt(sign){const v=prompt(sign<0?"Damage taken":"Healing received");if(v===null)return;
-  const n=Math.abs(+v||0);
-  sign<0?applyDamage(n):applyHealing(n);}
+  const n=Math.abs(Math.floor(+v||0));
+  if(!n){toast("Enter a whole number above 0");return;}
+  if(hpPending.t)commitHp(); /* land any ± taps first, so the typed amount is its own event */
+  tallyHp("c",sign*n);commitHp();}
 function tempHpPrompt(){const v=prompt("Temporary HP");if(v===null)return;cur().hp.temp=Math.max(0,+v||0);touch();renderTab();}
 function editHp(){explainHP();}
 function setDeath(k,i){const c=cur();c.deathSaves[k]=c.deathSaves[k]===i?i-1:i;touch();renderTab();
@@ -2257,7 +2376,7 @@ function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and 
   c.deathSaves={s:0,f:0};c.exhaustion=Math.max(0,c.exhaustion-1);
   c.features.forEach(f=>{if(f.uses)f.usesLeft=maxUses(c,f);});
   c.spellcasting.spells.forEach(s=>{if(s.uses)s.usesLeft=+s.uses;}); /* incl. 🌅 dawn & 🌙 */
-  c.activeBuffs=[];c.concentration=null; /* temporary effects end */
+  c.activeBuffs=[];c.concentration=null;c.wildSurge=null; /* temporary effects end */
   const gone=dismissConcSummons(c);
   touch();renderTab();toast("☀️ Long rest complete!"+(gone?" ("+gone+" summon"+(gone>1?"s":"")+" dismissed)":""));}
 function dmgPartRow(p){return `<div class="row dmgpart" style="margin-bottom:6px">
@@ -2661,14 +2780,15 @@ function itemRow(it,i){const c=cur();
     it.magic?"+"+it.magic:"",it.weight?it.weight+" lb":"",it.cost?esc(it.cost):""].filter(Boolean).join(" · ");
   const fx=(it.effects||[]).length?` <span style="color:var(--gold)" title="grants bonuses">✦</span>`:"";
   return `<div class="li" data-nm="${esc(it.name.toLowerCase())}" data-k="i:${esc(it.id||it.name)}">
-  <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-    <div class="li-title">${esc(it.name)}${it.qty>1?" ×"+it.qty:""}${fx}
+  <div class="li-head rc" onclick="this.parentElement.classList.toggle('open')">
+    <div class="rc-main"><div class="li-title">${esc(it.name)}${fx}
       ${it.equipped?'<span class="tag" style="color:var(--green);border-color:var(--green)">equipped</span>':""}
-      ${it.attuned?'<span class="tag c">attuned</span>':""}
-      <div class="li-sub">${sub}</div></div>
-    <button class="iconbtn" onclick="event.stopPropagation();qtyDelta(${i},-1)">−</button>
-    <button class="iconbtn" onclick="event.stopPropagation();qtyDelta(${i},1)">＋</button>
-    <button class="iconbtn" onclick="event.stopPropagation();editItem(${i})">✏️</button></div>
+      ${it.attuned?'<span class="tag c">attuned</span>':""}</div>
+      <div class="rc-meta"><span class="uses-txt"><b>×${+it.qty||0}</b></span>${sub?`<span class="uses-txt">${sub}</span>`:""}</div></div>
+    <div class="rc-side">
+     <div class="rc-top"><button class="iconbtn sm" title="One less" onclick="event.stopPropagation();qtyDelta(${i},-1)">−</button>
+      <button class="iconbtn sm" title="One more" onclick="event.stopPropagation();qtyDelta(${i},1)">＋</button></div>
+     <div class="rc-opts"><button class="iconbtn sm" title="Edit" onclick="event.stopPropagation();editItem(${i})">✏️</button></div></div></div>
   <div class="li-body">${it.desc?`<p>${esc(it.desc).replace(/\n+/g,"</p><p>")}</p>`:""}
     ${(it.effects||[]).length?`<p class="dim">Bonuses: ${it.effects.map(fxLabel).join(", ")}${it.needsAttune?" (needs attunement)":""} — active while equipped.</p>`:""}
     <div class="row"><button class="pill ${it.equipped?"on":""}" onclick="toggleEquip(${i})">Equipped</button>
@@ -2775,14 +2895,17 @@ function featLi(c,f,i){const mx=maxUses(c,f);const kind=featKind(f);
   const fx=(f.effects||[]).length?` <span style="color:var(--gold)" title="grants automatic bonuses">✦</span>`:"";
   const g=f.grants||{};
   return `<div class="li" data-k="f:${esc(f.name)}">
-   <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-    <div class="li-title">${esc(f.name)}${fx} ${f.source==="feat"?'<span class="tag" style="color:var(--accent2);border-color:var(--accent2)">feat</span>':""}${f.source==="race"?'<span class="tag" style="color:var(--blue);border-color:var(--blue)">race</span>':""}${f.source==="background"?'<span class="tag" style="color:var(--green);border-color:var(--green)">background</span>':""}${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${kind!=="passive"?`<span class="tag">${KIND_TAG[kind]||kind}</span>`:""}${f.slotCast?'<span class="tag c">uses spell slot</span>':""}${(g.spells||[]).length?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="grants spells">✨ ${g.spells.length}</span>`:""}${(g.summons||[]).length?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="can summon a creature">🐾 ${g.summons.length}</span>`:""}${f.ph&&f.desc===PH_TEXT?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">paste text</span>':""}
-     ${mx>0?`<div class="li-sub">${f.usesLeft??mx}/${mx} uses · ${f.recharge==="short"?"🌙 short rest":f.recharge==="short1"?"🌙 +1 per short rest":"☀️ long rest"}</div>`:""}</div>
-    ${mx>0?`<button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>
-    <button class="iconbtn" title="Undo use" onclick="event.stopPropagation();undoFeature(${i})">↩</button>`:""}
-    <button class="iconbtn" title="${f.fav?"Unpin from the top":"Pin to the top"}" onclick="event.stopPropagation();toggleFav(${i})">${f.fav?"⭐":"☆"}</button>
-    <button class="iconbtn" title="${f.hidden?"Show in the list again":"Hide from the list (bonuses keep working)"}" onclick="event.stopPropagation();toggleHidden(${i})">${f.hidden?"👁":"🙈"}</button>
-    <button class="iconbtn" onclick="event.stopPropagation();editFeature(${i})">✏️</button></div>
+   <div class="li-head rc" onclick="this.parentElement.classList.toggle('open')">
+    <div class="rc-main"><div class="li-title">${esc(f.name)}${fx} ${f.source==="feat"?'<span class="tag" style="color:var(--accent2);border-color:var(--accent2)">feat</span>':""}${f.source==="race"?'<span class="tag" style="color:var(--blue);border-color:var(--blue)">race</span>':""}${f.source==="background"?'<span class="tag" style="color:var(--green);border-color:var(--green)">background</span>':""}${f.cls?`<span class="tag">${esc(f.cls)}${f.minLv?" · lv "+f.minLv:""}</span>`:""}${f.slotCast?'<span class="tag c">uses spell slot</span>':""}${(g.spells||[]).length?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="grants spells">✨ ${g.spells.length}</span>`:""}${(g.summons||[]).length?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="can summon a creature">🐾 ${g.summons.length}</span>`:""}${f.ph&&f.desc===PH_TEXT?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">paste text</span>':""}</div>
+     ${kind!=="passive"||mx>0?`<div class="rc-meta">
+      ${kind!=="passive"?`<span class="kind-chip">${KIND_TAG[kind]||kind}</span>`:""}
+      ${mx>0?`<span class="uses-txt"><b>${f.usesLeft??mx}/${mx}</b> uses · ${f.recharge==="short"?"🌙 short rest":f.recharge==="short1"?"🌙 +1 per short rest":"☀️ long rest"}</span>`:""}</div>`:""}</div>
+    <div class="rc-side">
+     ${mx>0?`<div class="rc-top"><button class="btn ghost small" onclick="event.stopPropagation();useFeature(${i})">Use</button>
+      <button class="iconbtn sm" title="Undo use" onclick="event.stopPropagation();undoFeature(${i})">↩</button></div>`:""}
+     <div class="rc-opts"><button class="iconbtn sm" title="${f.fav?"Unpin from the top":"Pin to the top"}" onclick="event.stopPropagation();toggleFav(${i})">${f.fav?"⭐":"☆"}</button>
+     <button class="iconbtn sm" title="${f.hidden?"Show in the list again":"Hide from the list (bonuses keep working)"}" onclick="event.stopPropagation();toggleHidden(${i})">${f.hidden?"👁":"🙈"}</button>
+     <button class="iconbtn sm" title="Edit" onclick="event.stopPropagation();editFeature(${i})">✏️</button></div></div></div>
    <div class="li-body">
     ${(f.effects||[]).length?`<p class="dim">Bonuses: ${f.effects.map(fxLabel).join(", ")} — applied automatically.</p>`:""}
     ${(g.spells||[]).length?`<div class="row" style="margin:8px 0"><span style="flex:1" class="dim">✨ Grants: ${g.spells.map(x=>esc(gsName(x))+(gsCustom(x)?" (custom)":"")).join(", ")}</span>
@@ -3013,12 +3136,20 @@ function deleteFeature(i){const c=cur();const f=c.features[i];if(!f)return;
     c.companions=c.companions.filter(x=>x.src!==f.name);
   touch();closeModal();renderTab();}
 function useFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
+  const isRage=f===rageFeature(c);
+  if(isRage&&buffOn(c,"Rage")){toast("Already raging — turn 😡 Rage off in Active effects (Main) to end it");return;}
   if(f.usesLeft===undefined)f.usesLeft=mx;
   if(f.usesLeft<=0){toast("No uses left — "+(f.recharge==="short"?"short or long":"long")+" rest to recover");return;}
-  f.usesLeft--;touch();renderTab();toast(esc(f.name)+": "+f.usesLeft+"/"+mx+" left");}
+  f.usesLeft--;
+  if(isRage){toggleBuff("Rage",{spent:true});return;} /* the use is spent: also start the rage (and its Wild Surge) */
+  touch();renderTab();toast(esc(f.name)+": "+f.usesLeft+"/"+mx+" left");}
 function undoFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
   if((f.usesLeft??mx)>=mx){toast("Already at full uses");return;}
-  f.usesLeft=Math.min(mx,(f.usesLeft??mx)+1);touch();renderTab();toast("↩ "+esc(f.name)+": "+f.usesLeft+"/"+mx);}
+  f.usesLeft=Math.min(mx,(f.usesLeft??mx)+1);
+  /* undoing an accidental rage also ends it */
+  const endRage=f===rageFeature(c)&&buffOn(c,"Rage");
+  if(endRage){c.activeBuffs=c.activeBuffs.filter(x=>x!=="Rage");c.wildSurge=null;}
+  touch();renderTab();toast("↩ "+esc(f.name)+": "+f.usesLeft+"/"+mx+(endRage?" — rage ended":""));}
 function editFeature(i,keepDraft){const c=cur();
   if(!keepDraft||!_ftDraft||_ftDraft.i!==i){
     const src=i>=0?c.features[i]:{name:"",desc:"",uses:0,recharge:"long",effects:[],kind:"",slotCast:false};
@@ -4281,6 +4412,69 @@ function runSelfTests(){
       ok([...document.querySelectorAll("#raceList option")].map(o=>o.value).includes("Testling"),
          "the creation wizard lists it too");
     }finally{real.closeModal();openModal=()=>{};db.customRaces=keep;}});
+
+  /* ---- Path of Wild Magic ---- */
+  const wildBarb=lv=>mk(x=>{x.classes=[{name:"Barbarian",subclass:"Path of Wild Magic",level:lv}];x.abilities.con=16;
+    for(const f of expectedClassFeatures(x).values()){const au=classUses(x,f.cls,f.name,f.desc,f.uses,f.recharge);
+      x.features.push({name:f.name,desc:f.desc,uses:au.uses,recharge:au.recharge,source:"class",fid:f.fid,cls:f.cls,minLv:f.minLv,kind:f.kindHint,effects:JSON.parse(JSON.stringify(f.fx||[]))});}});
+  t("Path of Wild Magic is built in for 2014 at the right levels",()=>{const c=wildBarb(14);
+    eq(c.features.map(f=>f.name+"@"+f.minLv).join(),"Magic Awareness@3,Wild Surge@3,Bolstering Magic@6,Unstable Backlash@10,Controlled Surge@14");
+    ok(!c.features.some(f=>f.ph),"no paste-your-text placeholders");});
+  t("Magic Awareness & Bolstering Magic use proficiency bonus, long rest",()=>{const c=wildBarb(6);
+    ["Magic Awareness","Bolstering Magic"].forEach(n=>{const f=c.features.find(x=>x.name===n);
+      eq(maxUses(c,f),3,n);eq(f.recharge,"long",n);});});
+  t("Wild Surge DC is 8 + prof + Con",()=>{const c=wildBarb(5);eq(surgeDC(c),8+3+3);});
+  t("entering rage rolls a Wild Surge; ending it clears the surge",()=>{const c=wildBarb(3);
+    toggleBuff("Rage");ok(c.wildSurge&&c.wildSurge.n>=1&&c.wildSurge.n<=8,"surge rolled");ok(surgeNow(c),"surge in play");
+    toggleBuff("Rage");eq(c.wildSurge,null);eq(surgeNow(c),null);});
+  t("protective lights (6) gives +1 AC only while raging",()=>{const c=wildBarb(3);const base=acVal(c);
+    toggleBuff("Rage");setSurge(6);eq(acVal(c),base+1);
+    c.activeBuffs=[];eq(acVal(c),base,"a surge without rage counts for nothing");});
+  t("a long rest ends the surge",()=>{const c=wildBarb(3);toggleBuff("Rage");setSurge(2);longRest();eq(c.wildSurge,null);});
+  t("non-Wild-Magic barbarians never surge",()=>{const c=mk(x=>{x.classes=[{name:"Barbarian",subclass:"Path of the Berserker",level:5}];});
+    toggleBuff("Rage");eq(c.wildSurge||null,null);});
+  t("Wild Surge can't be set without rage",()=>{const c=wildBarb(3);setSurge(4);eq(c.wildSurge||null,null);});
+  t("malformed wildSurge in a save is cleaned",()=>{const c=migrate({...newCharacter(),wildSurge:{n:"x"}});eq(c.wildSurge,null);
+    eq(migrate({...newCharacter(),wildSurge:{n:9}}).wildSurge,null);eq(migrate({...newCharacter(),wildSurge:{n:3}}).wildSurge.n,3);});
+  t("surge temp HP never lowers existing temp HP",()=>{const c=wildBarb(3);c.hp.temp=20;surgeTempHp();eq(c.hp.temp,20);});
+
+  /* ---- Rage: feature uses and the buff are one thing ---- */
+  const rager=left=>mk(x=>{x.classes=[{name:"Barbarian",subclass:"",level:3}];
+    x.features.push({name:"Rage",uses:3,recharge:"long",usesLeft:left,effects:[],source:"class",cls:"Barbarian"});});
+  t("turning on the Rage buff spends a rage; turning it off refunds nothing",()=>{const c=rager(3);
+    toggleBuff("Rage");ok(buffOn(c,"Rage"));eq(c.features[0].usesLeft,2);
+    toggleBuff("Rage");ok(!buffOn(c,"Rage"));eq(c.features[0].usesLeft,2);});
+  t("Use on the Rage feature turns the buff on, spending exactly one",()=>{const c=rager(3);
+    useFeature(0);ok(buffOn(c,"Rage"),"raging");eq(c.features[0].usesLeft,2);
+    useFeature(0);eq(c.features[0].usesLeft,2,"no second spend while already raging");});
+  t("undoing a rage use refunds it and ends the rage",()=>{const c=rager(3);
+    useFeature(0);undoFeature(0);eq(c.features[0].usesLeft,3);ok(!buffOn(c,"Rage"));});
+  t("no rages left: the buff asks first and declining changes nothing",()=>{const c=rager(0);
+    const keep=window.confirm;try{window.confirm=()=>false;toggleBuff("Rage");ok(!buffOn(c,"Rage"));
+      window.confirm=()=>true;toggleBuff("Rage");ok(buffOn(c,"Rage"));eq(c.features[0].usesLeft,0);}finally{window.confirm=keep;}});
+  t("Use on the Rage feature also rolls the Wild Surge",()=>{const c=wildBarb(3);
+    c.features.push({name:"Rage",uses:3,recharge:"long",effects:[],source:"class",cls:"Barbarian"});
+    useFeature(c.features.length-1);ok(buffOn(c,"Rage"));ok(surgeNow(c),"surge rolled");});
+  t("Main Damage… goes through the commit: temp HP first, then undo",()=>{const c=mk(x=>{x.hp={max:20,current:20,temp:3};});
+    const keep=window.prompt;try{window.prompt=()=>"5";hpPrompt(-1);eq(c.hp.temp,0);eq(c.hp.current,18);
+      undoHp();eq(c.hp.current,20);eq(c.hp.temp,3);
+      window.prompt=()=>"x";hpPrompt(-1);eq(c.hp.current,20,"junk ignored");}finally{window.prompt=keep;}});
+
+  /* ---- allies: exact damage / healing ---- */
+  t("ally Damage…/Heal… applies the typed amount with undo",()=>{
+    const c=mk(x=>{x.companions=[{id:"w1",name:"Wolf",kind:"pet",ac:13,hpMax:11,hpCur:11,speed:40,attacks:[]}];});
+    const keep=window.prompt;
+    try{window.prompt=()=>"4";compHpPrompt("w1",-1);eq(c.companions[0].hpCur,7);
+      window.prompt=()=>"99";compHpPrompt("w1",1);eq(c.companions[0].hpCur,11,"healing caps at max");
+      undoHp();eq(c.companions[0].hpCur,7,"undo restores");
+      window.prompt=()=>"abc";compHpPrompt("w1",-1);eq(c.companions[0].hpCur,7,"junk input ignored");
+      window.prompt=()=>"-5";compHpPrompt("w1",-1);eq(c.companions[0].hpCur,2,"sign comes from the button");
+    }finally{window.prompt=keep;}});
+  t("ally Damage… lands pending ± taps separately",()=>{
+    const c=mk(x=>{x.companions=[{id:"w1",name:"Wolf",kind:"pet",ac:13,hpMax:11,hpCur:11,speed:40,attacks:[]}];});
+    const keep=window.prompt;
+    try{tallyHp("w1",-1);window.prompt=()=>"3";compHpPrompt("w1",-1);eq(c.companions[0].hpCur,7);
+      undoHp();eq(c.companions[0].hpCur,10,"undo only reverts the typed amount");}finally{window.prompt=keep;}});
 
   }finally{
     cancelHp(); /* never leave a timer that would fire against the restored db */

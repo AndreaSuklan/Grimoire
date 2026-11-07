@@ -54,6 +54,16 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.6 — Path of Wild Magic, roomier cards
+
+- **🌀 Path of Wild Magic (Barbarian, 2014 / Tasha's) built in**: Magic Awareness, Wild Surge, Bolstering Magic, Unstable Backlash and Controlled Surge at the right levels, written as summaries in our own words (paste your book's text via ✏️ if you prefer). Magic Awareness and Bolstering Magic get uses equal to your proficiency bonus, recharging on a long rest. The 2024 PHB doesn't reprint this subclass, so it's 2014-only.
+- **Wild Surge is rolled for you**: raging rolls the d8 Wild Magic table and shows the effect as a chip in the status strip until the rage ends. Tap it for the full effect, the save DC (8 + prof + Con) and dice buttons for its damage or temp HP. From level 10 the damage pop-up while raging offers **Unstable Backlash** (reroll, replaces the current effect); from level 14 **Controlled Surge** rolls twice and lets you pick (any effect on doubles). Protective lights adds +1 AC to your sheet automatically while you rage; the other effects are shown, not calculated.
+- **Feature and item cards**: the buttons moved to the right-hand side, so the action type, uses and recharge (and item quantity) get the full width and a larger font.
+- **Rage is one thing now**: pressing Use on the Rage feature turns on the Rage effect, and turning on the effect spends a rage (it asks first if none are left). ↩ on the feature refunds the use and ends the rage. No double spending either way.
+- **Main Damage… / Heal…** now goes through the same commit as the ± buttons: one toast with ↩ Undo, the concentration check, and (while raging) Unstable Backlash.
+- **Feature and item cards** (update): Use / ↩ (or − / ＋ on items) sit top-right, pin / hide / edit in a row bottom-right.
+- **Allies: Damage… / Heal…** buttons to apply an exact amount, with the same toast, ↩ Undo and 0-HP / concentration handling as the ± buttons.
+
 ### New in v1.5 — tidier feature list, simpler grant editing
 
 - **🙈 Hide a feature** you're done reading. It drops into a collapsed **Hidden** section at the bottom of the Features tab — but it keeps working: bonuses, resistances, limited uses and grants all stay live. This is about clutter, not about switching something off. Pinning (⭐) and hiding are opposites: doing one clears the other.
