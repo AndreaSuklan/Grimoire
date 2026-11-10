@@ -97,6 +97,7 @@ hr{border:none;border-top:1px solid var(--line);margin:12px 0}
 .skrow .ab{font-size:11px;color:var(--dim);text-transform:uppercase;width:32px}
 .skrow .md{font-weight:700;font-size:16px;width:44px;text-align:right;color:var(--accent2);cursor:pointer;padding:4px;border-radius:8px}
 .skrow .md:active{background:var(--card2)}
+.brk .skrow .md{width:auto;max-width:62%;min-width:44px;cursor:default;overflow-wrap:anywhere}
 
 /* pips */
 .pips{display:flex;gap:6px;flex-wrap:wrap}
@@ -401,10 +402,10 @@ const BUILTIN_SUBS=[
  /* Path of Wild Magic (Tasha's Cauldron of Everything, 2014 only — the 2024 PHB does not reprint it). Summaries in our own words. */
  {edition:"2014",class:"Barbarian",name:"Path of Wild Magic",features:[
   {name:"Magic Awareness",levels:[3],uses:"prof",recharge:"long",kindHint:"action",desc:"(Summary) Action: open your awareness to magic. Until the end of your next turn you know the location of every spell and magic item within 60 ft that isn't behind total cover, and for any spell you sense you also learn its school of magic.\n\nUses: your proficiency bonus, all regained on a long rest."},
-  {name:"Wild Surge",levels:[3],fx:[],kindHint:"passive",desc:"(Summary) Whenever you enter your rage, roll a d8 on the Wild Magic table and its effect happens at once. If the effect calls for a saving throw, the DC is 8 + your proficiency bonus + your Constitution modifier.\n\nThe app rolls this for you when you rage (press Use on Rage, or turn on 😡 Rage in Active effects on Main) and shows the effect in the strip at the top until the rage ends.\n\nWILD MAGIC TABLE (d8)\n1. Shadowy tendrils: each creature of your choice you can see within 30 ft makes a Con save or takes 1d12 necrotic damage. You gain 1d12 temporary HP.\n2. Teleport up to 30 ft to an unoccupied space you can see. Until the rage ends, you can do it again as a bonus action on each of your turns.\n3. An intangible spirit that looks like a flumph or a pixie (your choice) appears within 5 ft of a creature you can see within 30 ft. At the end of the current turn it explodes: each creature within 5 ft of it makes a Dex save or takes 1d6 force damage. Until the rage ends, you can summon another as a bonus action on each of your turns.\n4. One weapon you're holding is infused: until the rage ends its damage becomes force and it gains the light and thrown properties (range 20/60 ft). If it leaves your hand, it reappears there at the end of the current turn.\n5. Until the rage ends, any creature that hits you with an attack roll takes 1d6 force damage.\n6. Protective lights: until the rage ends you have +1 AC, and allies within 10 ft of you get the same bonus.\n7. Flowers and vines: until the rage ends, the ground within 15 ft of you is difficult terrain for your enemies.\n8. A bolt of light from your chest: another creature you can see within 30 ft makes a Con save or takes 1d6 radiant damage and is blinded until the start of your next turn. Until the rage ends, you can do it again as a bonus action on each of your turns."},
+  {name:"Wild Surge",levels:[3],fx:[],kindHint:"passive",desc:"(Summary) Whenever you enter your rage, roll a d8 on the Wild Magic table and its effect happens at once. If the effect calls for a saving throw, the DC is 8 + your proficiency bonus + your Constitution modifier.\n\nWhen you rage (press Use on Rage, or turn on 😡 Rage in Active effects on Main) the app asks every time: roll the d8 in the app, or pick the result you rolled at the table. The effect shows in the strip at the top until the rage ends.\n\nWILD MAGIC TABLE (d8)\n1. Shadowy tendrils: each creature of your choice you can see within 30 ft makes a Con save or takes 1d12 necrotic damage. You gain 1d12 temporary HP.\n2. Teleport up to 30 ft to an unoccupied space you can see. Until the rage ends, you can do it again as a bonus action on each of your turns.\n3. An intangible spirit that looks like a flumph or a pixie (your choice) appears within 5 ft of a creature you can see within 30 ft. At the end of the current turn it explodes: each creature within 5 ft of it makes a Dex save or takes 1d6 force damage. Until the rage ends, you can summon another as a bonus action on each of your turns.\n4. One weapon you're holding is infused: until the rage ends its damage becomes force and it gains the light and thrown properties (range 20/60 ft). If it leaves your hand, it reappears there at the end of the current turn.\n5. Until the rage ends, any creature that hits you with an attack roll takes 1d6 force damage.\n6. Protective lights: until the rage ends you have +1 AC, and allies within 10 ft of you get the same bonus.\n7. Flowers and vines: until the rage ends, the ground within 15 ft of you is difficult terrain for your enemies.\n8. A bolt of light from your chest: another creature you can see within 30 ft makes a Con save or takes 1d6 radiant damage and is blinded until the start of your next turn. Until the rage ends, you can do it again as a bonus action on each of your turns."},
   {name:"Bolstering Magic",levels:[6],uses:"prof",recharge:"long",kindHint:"action",desc:"(Summary) Action: touch one creature (it can be you) and choose one benefit:\n• For 10 minutes, whenever it makes an attack roll or an ability check, it can roll a d3 and add the result to the d20.\n• Roll a d3: the creature regains one expended spell slot of that level or lower (its choice). A creature that receives this benefit can't receive it again until it finishes a long rest.\n\nUses: your proficiency bonus, all regained on a long rest."},
-  {name:"Unstable Backlash",levels:[10],fx:[],kindHint:"reaction",desc:"(Summary) While raging, immediately after you take damage or fail a saving throw, you can use your reaction to roll on the Wild Magic table and produce that effect at once. It replaces your current Wild Magic effect.\n\nIn the app: when you take damage while raging, the damage pop-up offers 🌀 Unstable Backlash; you can also reroll from the Wild Surge chip at the top."},
-  {name:"Controlled Surge",levels:[14],fx:[],kindHint:"passive",desc:"(Summary) Whenever you roll on the Wild Magic table, you can roll the die twice and choose which of the two effects to unleash. If both dice show the same number, you can ignore it and choose any effect on the table.\n\nThe app rolls twice automatically from level 14 and lets you pick."}]}];
+  {name:"Unstable Backlash",levels:[10],fx:[],kindHint:"reaction",desc:"(Summary) While raging, immediately after you take damage or fail a saving throw, you can use your reaction to roll on the Wild Magic table and produce that effect at once. It replaces your current Wild Magic effect.\n\nIn the app: when you take damage while raging, the damage pop-up offers 🌀 Unstable Backlash; you can also start it from the Wild Surge chip at the top. Either way you choose to roll in the app or pick the result you rolled."},
+  {name:"Controlled Surge",levels:[14],fx:[],kindHint:"passive",desc:"(Summary) Whenever you roll on the Wild Magic table, you can roll the die twice and choose which of the two effects to unleash. If both dice show the same number, you can ignore it and choose any effect on the table.\n\nFrom level 14, Roll for me rolls twice and lets you pick; if you roll at the table, just pick the effect you chose."}]}];
 /* Oath spells auto-added as always-prepared (all SRD spells; 2014 lists, reused for 2024) */
 const SUBCLASS_SPELLS={
  "Paladin|ancients":{3:["Ensnaring Strike","Speak with Animals"],5:["Misty Step","Moonbeam"],9:["Plant Growth","Protection from Energy"],13:["Ice Storm","Stoneskin"],17:["Commune with Nature","Tree Stride"]},
@@ -700,7 +701,10 @@ const MASTERIES={
  Vex:"On a hit, you have advantage on your next attack roll against that target before the end of your next turn."};
 /* Toggleable temporary buffs (quick-bar on Main) */
 const BUFFS=[
- {name:"Rage",ic:"😡",conc:false,fx:[{t:"dmg.melee",v:"level>=16?4:level>=9?3:2"},{t:"custom.resist",v:"bludgeoning, piercing & slashing (Rage)"}],note:"melee damage bonus & resistance while raging"},
+ {name:"Rage",ic:"😡",conc:false,fx:[ /* uses the Barbarian level, so multiclassing doesn't inflate it; Strength attacks only */
+   {t:"dmg.melee",v:"barbarian>=16?4:barbarian>=9?3:2",ab:"str",ed:"2014"}, /* 2014: melee weapon attacks using Strength */
+   {t:"dmg.all",v:"barbarian>=16?4:barbarian>=9?3:2",ab:"str",ed:"2024"}, /* 2024: any attack using Strength (thrown included) */
+   {t:"custom.resist",v:"bludgeoning, piercing & slashing (Rage)"}],note:"damage bonus on Strength attacks & resistance while raging"},
  {name:"Shield (spell)",ic:"🛡️",fx:[{t:"ac",v:5}],note:"+5 AC until the start of your next turn"},
  {name:"Shield of Faith",ic:"✝️",conc:true,fx:[{t:"ac",v:2}],note:"+2 AC (concentration)"},
  {name:"Bless",ic:"✨",conc:true,d20:{on:["attack","save"],dice:"1d4"},note:"+1d4 to attacks & saves (concentration)"},
@@ -923,20 +927,25 @@ function evalFormula(c,v,raw){ /* number | formula with prof, level, str…cha (
   const gm=raw?(a=>mod(c.abilities[a])):(a=>amod(c,a));
   const vars={prof:profBonus(c),pb:profBonus(c),level:totalLevel(c),lv:totalLevel(c),
     str:gm("str"),dex:gm("dex"),con:gm("con"),int:gm("int"),wis:gm("wis"),cha:gm("cha")};
+  /* class levels by name (barbarian, fighter…): 0 for classes you don't have, so multiclass formulas stay right */
+  CLASSES.forEach(k=>{if(k!=="Other")vars[k.toLowerCase()]=0;});
+  (c.classes||[]).forEach(k=>{const n=String(k.name||"").toLowerCase();if(CLASSES.some(x=>x.toLowerCase()===n))vars[n]+=(+k.level||0);});
   e=e.replace(/[a-z]+/g,w=>w in vars?vars[w]:((w==="min"||w==="max")?"Math."+w:w));
   if(/[a-z_]/i.test(e.replace(/Math\.(min|max)/g,"")))return 0;
   try{return Math.floor(+Function('"use strict";return ('+e+')')()||0);}catch(err){return 0;}}
 function itemActive(it){return it.equipped&&!(it.needsAttune&&!it.attuned);}
 function activeEffects(c){
   const out=[];
-  const add=(src,e)=>{if(!e||!e.t)return;
+  const add=(src,e,extra)=>{if(!e||!e.t)return;
     if(e.when==="armored"&&!equippedArmor(c))return;
     if(e.when==="unarmored"&&equippedArmor(c))return;
-    out.push({src,t:e.t,v:e.v});};
+    if(e.ed&&e.ed!==(c.edition||"2014"))return; /* edition-specific rule */
+    const o={src,t:e.t,v:e.v};if(e.ab)o.ab=e.ab;if(extra)Object.assign(o,extra);
+    out.push(o);};
   (c.features||[]).forEach(f=>(f.effects||[]).forEach(e=>add(f.name,e)));
   ((c.inventory||{}).items||[]).forEach(it=>{if(itemActive(it))(it.effects||[]).forEach(e=>add(it.name,e));});
   (c.activeBuffs||[]).forEach(bn=>{const b=allBuffs(c).find(x=>x.name===bn);
-    if(b)(b.fx||[]).forEach(e=>add("🔆 "+b.name,e));});
+    if(b)(b.fx||[]).forEach(e=>add((b.ic||"🔆")+" "+b.name,e,{buff:b.name,ic:b.ic||"🔆"}));});
   {const ws=surgeNow(c);if(ws&&ws.n===6)add("💠 Wild Surge: protective lights",{t:"ac",v:1});}
   ruleEffects(c).forEach(e=>out.push(e)); /* rules the app applies for you — same pipeline, so they show in every ⓘ breakdown */
   return out;}
@@ -997,8 +1006,8 @@ function toggleBuff(name,opts){const c=cur();opts=opts||{};
         rageNote=" · "+(rf.usesLeft??mx)+"/"+mx+" rages left";}}
     c.activeBuffs.push(name);
     if(b&&b.conc)setConcentration(name);
-    toast("🔆 "+esc(name)+" active"+(b&&b.note?" — "+esc(b.note):"")+rageNote);
-    if(name==="Rage"&&hasWildSurge(c)){c.wildSurge=null;touch();renderTab();rollWildSurge("rage");return;}}
+    toast((b&&b.ic||"🔆")+" "+esc(name)+" active"+(b&&b.note?" — "+esc(b.note):"")+rageNote);
+    if(name==="Rage"&&hasWildSurge(c)){c.wildSurge=null;touch();renderTab();surgeChoice("rage");return;}}
   touch();renderTab();}
 /* ---- Wild Surge (Path of Wild Magic barbarian) ----
    The surge lives in c.wildSurge = {n:1..8} but only counts while the Rage buff is on, so anything
@@ -1027,6 +1036,24 @@ function surgeDC(c){return 8+profBonus(c)+mod(abl(c,"con"));}
 function surgeNow(c){ /* the effect currently in play, or null */
   if(!c||!buffOn(c,"Rage")||!c.wildSurge)return null;
   return WILD_SURGE[(+c.wildSurge.n||0)-1]||null;}
+/* Every surge (entering rage, Unstable Backlash, the chip) asks first: roll in the app, or pick the
+   result you rolled at the table. A picked result is logged as "rolled at table". With Controlled Surge
+   you simply pick the effect you ended up with — the app doesn't ask for both dice. */
+function surgeChoice(why){const c=cur();if(!c)return;
+  if(!buffOn(c,"Rage")){toast("Wild Surge only lasts while you rage — turn on 😡 Rage first");return;}
+  const title=why==="backlash"?"Unstable Backlash":"Wild Surge";
+  const controlled=hasFeat(c,"Barbarian","Controlled Surge");
+  openModal(`<h2>🌀 ${title} ${XBTN}</h2>
+   ${why==="backlash"?`<p class="dim">The new effect replaces your current one.</p>`:""}
+   <button class="btn" style="width:100%" onclick="closeModal();rollWildSurge('${why||""}')">🎲 Roll for me${controlled?" (twice — Controlled Surge)":""}</button>
+   <h3 style="margin:14px 0 4px">…or pick what you rolled</h3>
+   <p class="dim" style="margin-top:0">${controlled?"Controlled Surge: pick the effect you chose from your two dice (any effect on doubles).":"Tap the d8 result you rolled at the table."}</p>
+   ${WILD_SURGE.map(s=>`<button class="li" style="display:block;width:100%;text-align:left" onclick="pickSurge(${s.n},'${why||""}')">
+     <div style="font-weight:600">${s.n}. ${s.ic} ${esc(s.name)}</div></button>`).join("")}`);}
+function pickSurge(n,why){n=Math.floor(+n);
+  if(!(n>=1&&n<=8)){toast("Pick a result from 1 to 8");return;}
+  logRoll((why==="backlash"?"Unstable Backlash":"Wild Surge")+" (rolled at table)",n,"d8 ["+n+"] — picked");
+  setSurge(n,why);}
 function rollWildSurge(why){const c=cur();if(!c)return;
   const controlled=hasFeat(c,"Barbarian","Controlled Surge");
   const a=rollDie(8);
@@ -1043,7 +1070,7 @@ function setSurge(n,why){const c=cur();if(!c)return;
   c.wildSurge={n:+n};touch();renderTab();surgeInfo(why);}
 function surgeInfo(why){const c=cur();if(!c)return;
   const s=surgeNow(c);
-  if(!s){ if(buffOn(c,"Rage")&&hasWildSurge(c)){rollWildSurge();return;}
+  if(!s){ if(buffOn(c,"Rage")&&hasWildSurge(c)){surgeChoice();return;}
     toast("No Wild Surge in play — it starts when you enter your rage");return;}
   const dc=surgeDC(c);
   const backlash=hasFeat(c,"Barbarian","Unstable Backlash");
@@ -1056,7 +1083,7 @@ function surgeInfo(why){const c=cur();if(!c)return;
     ${(s.rolls||[]).map(r=>`<button class="btn ghost small" style="flex:none" onclick="damageRoll('Wild Surge: ${jstr(r[0])}','${r[1]}')">🎲 ${esc(r[0])}</button>`).join("")}
     ${s.temp?`<button class="btn ghost small" style="flex:none" onclick="surgeTempHp()">🎲 Gain ${s.temp} temp HP</button>`:""}
    </div>
-   ${backlash?`<hr><button class="btn ghost" style="width:100%" onclick="rollWildSurge('backlash')">🌀 Unstable Backlash — reroll (reaction)</button>
+   ${backlash?`<hr><button class="btn ghost" style="width:100%" onclick="surgeChoice('backlash')">🌀 Unstable Backlash — new effect (reaction)</button>
      <p class="dim" style="margin-top:6px">Use it right after you take damage or fail a saving throw while raging.</p>`:""}`);}
 function surgeTempHp(){const c=cur();if(!c)return;
   const r=rollExpr("1d12");logRoll("Wild Surge temp HP",r.total,r.detail);
@@ -1112,11 +1139,11 @@ function rollKind(label){const l=String(label||"").toLowerCase();
   return "check";}
 function buffD20Extras(c,kind){const out=[];
   (c.activeBuffs||[]).forEach(bn=>{const b=allBuffs(c).find(x=>x.name===bn);
-    if(b&&b.d20&&b.d20.on.includes(kind)&&b.d20.dice)out.push({name:b.name,dice:b.d20.dice});});
+    if(b&&b.d20&&b.d20.on.includes(kind)&&b.d20.dice)out.push({name:b.name,dice:b.d20.dice,ic:b.ic||"🔆"});});
   return out;}
 function buffDmgExtras(c){const out=[];
   (c.activeBuffs||[]).forEach(bn=>{const b=allBuffs(c).find(x=>x.name===bn);
-    if(b&&b.dmgDice)out.push({name:b.name,dice:b.dmgDice});});
+    if(b&&b.dmgDice)out.push({name:b.name,dice:b.dmgDice,ic:b.ic||"🔆"});});
   return out;}
 /* ---- concentration ---- */
 function concentrationBlocked(name){ /* ask BEFORE spending the slot/use — cancelling must cost nothing */
@@ -1148,15 +1175,17 @@ function concCheckModal(dmg){const c=cur();
     <button class="btn" onclick="closeModal();d20Roll('Concentration save (DC ${dc})',${saveMod(c,"con")})">🎲 Roll</button>
     <button class="btn danger" onclick="closeModal();dropConcentration()">Drop it</button>
     <button class="btn ghost" onclick="closeModal()">Kept it</button></div>`);}
-function bonusDetail(c,target){
+/* ctx = {ab} for one attack: effects tied to an ability (Rage: Strength) count only when the attack uses it */
+function bonusDetail(c,target,ctx){
   const raw=target.startsWith("abl.");
   const [dom]=target.split(".");
   return activeEffects(c).filter(e=>{
+    if(e.ab&&!(ctx&&ctx.ab===e.ab))return false;
     if(e.t===target)return true;
     const [d,k]=e.t.split(".");
     return d===dom&&k==="all"&&target!==dom+".all";})
-   .map(e=>({src:e.src,v:evalFormula(c,e.v,raw)})).filter(b=>b.v);}
-function bonusFor(c,target){return bonusDetail(c,target).reduce((s,b)=>s+b.v,0);}
+   .map(e=>({src:e.src,v:evalFormula(c,e.v,raw),buff:e.buff,ic:e.ic})).filter(b=>b.v);}
+function bonusFor(c,target,ctx){return bonusDetail(c,target,ctx).reduce((s,b)=>s+b.v,0);}
 function abl(c,a){return c.abilities[a]+bonusFor(c,"abl."+a);}
 function amod(c,a){return mod(abl(c,a));}
 function maxHP(c){return Math.max(1,(+c.hp.max||1)+bonusFor(c,"hpmax"));}
@@ -1303,17 +1332,41 @@ function explainSpell(which){const c=cur();const ab=c.spellcasting.ability;
   bonusDetail(c,"spell."+(which==="dc"?"dc":"atk")).forEach(b=>rows.push([esc(b.src),b.v]));
   explainModal(which==="dc"?"Spell save DC":"Spell attack",rows,which==="dc"?spellDC(c):fmt(spellAtkMod(c)),
    which==="dc"?"":`<button class="btn ghost" style="width:100%;margin-top:8px" onclick="closeModal();d20Roll('Spell attack',${spellAtkMod(c)})">🎲 Roll</button>`);}
-function explainAttack(i){const c=cur();const a=c.attacks[i];
-  const rows=[];
-  if(a.ability&&a.ability!=="none")rows.push([ABL_NAMES[a.ability]+" modifier",amod(c,a.ability)]);
-  if(a.proficient)rows.push(["Proficiency",profBonus(c)]);
-  if(+a.bonusMisc)rows.push(["Misc",+a.bonusMisc]);
-  if(+a.magic)rows.push(["Magic weapon",+a.magic]);
-  bonusDetail(c,"atk."+(a.kind||"melee")).forEach(b=>rows.push([esc(b.src),b.v]));
-  const dmg=(a.dmgParts||[]).map(p=>esc(p.d)+" "+esc(p.t||"")).join(" + ");
-  explainModal(esc(a.name)+" — to hit",rows,fmt(attackBonus(c,a)),
-   `<p class="dim">Damage: ${dmg||"—"}${a.addAbility?" + ability mod":""}${+a.magic?" +"+a.magic+" magic":""}${bonusFor(c,"dmg."+(a.kind||"melee"))?" "+fmt(bonusFor(c,"dmg."+(a.kind||"melee")))+" (bonuses)":""}</p>
-   ${a.mastery?`<p><b>⚔️ ${a.mastery} (mastery).</b> ${esc(MASTERIES[a.mastery]||"")}</p>`:""}`);}
+/* Tap an attack: two sections, To hit and Damage, with every bonus on its own named line. Only what is
+   active right now is listed (Rage shows only while raging and only for Strength attacks), so the totals
+   here always match the numbers on Main and what the dice buttons roll. */
+function attackBreakdown(c,a){const ctx=atkCtx(a);const kind=a.kind||"melee";
+  const hit=[];
+  if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
+  if(a.proficient)hit.push(["Proficiency",profBonus(c)]);
+  if(+a.bonusMisc)hit.push(["Misc",+a.bonusMisc]);
+  if(+a.magic)hit.push(["Magic weapon",+a.magic]);
+  bonusDetail(c,"atk."+kind,ctx).forEach(b=>hit.push([esc(b.src),b.v]));
+  const hitDice=buffD20Extras(c,"attack");
+  hitDice.forEach(b=>hit.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
+  const dmg=[];
+  (a.dmgParts||[]).forEach((p,j)=>dmg.push([j===0?"Weapon dice":"Extra dice",p.d+(p.t?" "+p.t:"")]));
+  if(a.addAbility&&ctx.ab)dmg.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
+  if(+a.magic)dmg.push(["Magic weapon",+a.magic]);
+  bonusDetail(c,"dmg."+kind,ctx).forEach(b=>dmg.push([esc(b.src),b.v]));
+  buffDmgExtras(c).forEach(b=>dmg.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
+  return {hit,hitTotal:fmt(attackBonus(c,a))+hitDice.map(b=>b.dice.startsWith("-")?" "+b.dice:" +"+b.dice).join(""),
+    dmg,dmgTotal:attackDmgLabel(c,a,true)||"—"};}
+function explainAttack(i){const c=cur();const a=c.attacks[i];const b=attackBreakdown(c,a);
+  const sect=(title,rows,total)=>`<h3 style="margin:12px 0 4px">${title}</h3>${fxRows(rows)}
+   <div class="skrow" style="border-top:2px solid var(--line)"><div class="nm"><b>Total</b></div><div class="md" style="cursor:default">${total}</div></div>`;
+  const ws=surgeNow(c);
+  const rageNoStr=buffOn(c,"Rage")&&atkCtx(a).ab!=="str";
+  openModal(`<h2>${esc(a.name)} ${XBTN}</h2>
+   <div class="brk">${sect("🎯 To hit",b.hit,b.hitTotal)}
+   ${sect("💥 Damage",b.dmg,b.dmgTotal)}</div>
+   ${ws&&ws.n===4?`<p class="dim">🗡️ Wild Surge — infused weapon: if this is the weapon you infused, its damage type is force until the rage ends.</p>`:""}
+   ${rageNoStr?`<p class="dim">😡 Rage adds no damage here: it only applies to attacks made with Strength.</p>`:""}
+   ${a.mastery?`<p><b>⚔️ ${a.mastery} (mastery).</b> ${esc(MASTERIES[a.mastery]||"")}</p>`:""}
+   <div class="row" style="margin-top:10px">
+    <button class="btn ghost" onclick="closeModal();rollAttackHit(${i})">🎲 Roll to hit</button>
+    ${(a.dmgParts||[]).length?`<button class="btn ghost" onclick="closeModal();rollAttackDamage(${i})">🎲 Roll damage</button>`:""}</div>
+   <p class="dim" style="margin-top:10px">Bonuses come from features, feats, equipped items and active effects (Main). Only what applies right now is listed.</p>`);}
 function explainHP(){const c=cur();
   const rows=[["Base max HP",+c.hp.max||1]];
   bonusDetail(c,"hpmax").forEach(b=>rows.push([esc(b.src),b.v]));
@@ -1381,7 +1434,7 @@ function renderStatusBar(){
     `<span class="sb exh" onclick="conditionsInfo()" title="${c.edition==="2024"?`${fmt(-2*c.exhaustion)} to every d20 test, ${fmt(-5*c.exhaustion)} ft speed`:"2014: a ladder of conditions — you are warned when you roll"}">😵 Exhaustion ${c.exhaustion}</span>`);
   if(buffOn(c,"Rage")&&hasWildSurge(c)){const ws=surgeNow(c);bits.push(ws
     ?`<span class="sb surge" onclick="surgeInfo()" title="Wild Surge in play — tap for details${hasFeat(c,"Barbarian","Unstable Backlash")?" or Unstable Backlash":""}">${ws.ic} ${esc(ws.name)}</span>`
-    :`<span class="sb surge" onclick="rollWildSurge()" title="You are raging but no Wild Surge has been rolled">🌀 Roll Wild Surge</span>`);}
+    :`<span class="sb surge" onclick="surgeChoice()" title="You are raging but no Wild Surge has been chosen yet">🌀 Wild Surge</span>`);}
   if(c.concentration)bits.push(
     `<span class="sb conc" onclick="dropConcentration()" title="tap to drop concentration">🧠 ${esc(c.concentration)} ✕</span>`);
   el.className=bits.length?"on":"";
@@ -2065,17 +2118,31 @@ function rollAttackHit(i){const c=cur();const a=c.attacks[i];
     am.qty=(+am.qty||0)-1;touch();renderTab();
     note="🏹 "+am.qty+" "+esc(am.name)+" left";}
   d20Roll(a.name+" attack",attackBonus(c,a),note);}
+/* The attack's own context: which ability it uses. Effects tied to an ability (Rage → Strength) read it. */
+function atkCtx(a){return {ab:a.ability&&a.ability!=="none"?a.ability:null};}
 function attackBonus(c,a){let b=+a.bonusMisc||0;
   if(a.ability&&a.ability!=="none")b+=amod(c,a.ability);
   if(a.proficient)b+=profBonus(c);
-  b+=(+a.magic||0)+bonusFor(c,"atk."+(a.kind||"melee"));return b;}
+  b+=(+a.magic||0)+bonusFor(c,"atk."+(a.kind||"melee"),atkCtx(a));return b;}
 function attackDmgExtra(c,a){ /* flat bonus added to first damage part */
-  let x=(+a.magic||0)+bonusFor(c,"dmg."+(a.kind||"melee"));
+  let x=(+a.magic||0)+bonusFor(c,"dmg."+(a.kind||"melee"),atkCtx(a));
   if(a.addAbility&&a.ability&&a.ability!=="none")x+=amod(c,a.ability);
   return x;}
-function attackDmgLabel(c,a){const parts=a.dmgParts||[];if(!parts.length)return "";
+/* Icons of the temporary effects (buffs) that are changing this attack right now, e.g. 😡 while raging. */
+function attackBuffIcons(c,a,which){
+  const ics=[];const push=ic=>{if(ic&&!ics.includes(ic))ics.push(ic);};
+  if(which!=="dmg"){bonusDetail(c,"atk."+(a.kind||"melee"),atkCtx(a)).forEach(b=>b.buff&&push(b.ic));
+    buffD20Extras(c,"attack").forEach(b=>push(b.ic));}
+  if(which!=="hit"){bonusDetail(c,"dmg."+(a.kind||"melee"),atkCtx(a)).forEach(b=>b.buff&&push(b.ic));
+    buffDmgExtras(c).forEach(b=>push(b.ic));}
+  return ics;}
+function attackDmgLabel(c,a,noIcons){const parts=a.dmgParts||[];if(!parts.length)return "";
   const x=attackDmgExtra(c,a);
-  return parts.map((p,j)=>esc(p.d)+(j===0&&x?fmt(x):"")+(p.t?" "+esc(p.t):"")).join(" + ");}
+  const txt=parts.map((p,j)=>esc(p.d)+(j===0&&x?fmt(x):"")+(p.t?" "+esc(p.t):""))
+    .concat(buffDmgExtras(c).map(b=>esc(b.dice).replace(/^\+/,"").replace(/^-/,"− ")))
+    .join(" + ").replace(/\+ − /g,"− ");
+  const ics=noIcons?[]:attackBuffIcons(c,a,"dmg");
+  return txt+(ics.length?` <span title="includes temporary effects — tap the attack for the breakdown">${ics.join("")}</span>`:"");}
 function rollAttackDamage(i){const c=cur();const a=c.attacks[i];
   const parts=a.dmgParts||[];if(!parts.length){toast("No damage set");return;}
   let total=0;const lines=[];
@@ -2084,7 +2151,7 @@ function rollAttackDamage(i){const c=cur();const a=c.attacks[i];
     const t=r.total+extra;total+=t;
     lines.push(`<div><b>${t}</b> ${esc(p.t||"damage")} <span class="dim">${esc(r.detail)}${extra?" "+fmt(extra):""}</span></div>`);});
   buffDmgExtras(c).forEach(b=>{const r=rollExpr(b.dice);
-    if(r){total+=r.total;lines.push(`<div><b>${r.total}</b> <span class="dim">🔆 ${esc(b.name)} ${esc(b.dice)}</span></div>`);}});
+    if(r){total+=r.total;lines.push(`<div><b>${r.total}</b> <span class="dim">${b.ic} ${esc(b.name)} ${esc(b.dice)}</span></div>`);}});
   logRoll(a.name+" damage",total);
   toast(`<div><b>${esc(a.name)} damage</b></div>`+bigHtml(total)+lines.join(""),6000);}
 function editAbilities(mode){const c=cur();mode=mode||"manual";
@@ -2177,7 +2244,7 @@ function commitHp(){
       <div class="big">${c.hp.current}<span style="font-size:16px;color:var(--dim)"> / ${maxHP(c)}</span></div>
       ${c.hp.temp?`<div class="dim">+${c.hp.temp} temp HP left</div>`:""}
       ${lost?'<div class="dim">🧠 concentration ended</div>':""}
-      <div class="dice-adv"><button class="pill" onclick="undoHp()">↩ Undo</button>${backlash?`<button class="pill" onclick="rollWildSurge('backlash')" title="reaction: reroll your Wild Surge">🌀 Unstable Backlash</button>`:""}</div>`,backlash?8000:5000);}
+      <div class="dice-adv"><button class="pill" onclick="undoHp()">↩ Undo</button>${backlash?`<button class="pill" onclick="surgeChoice('backlash')" title="reaction: a new Wild Surge effect">🌀 Unstable Backlash</button>`:""}</div>`,backlash?8000:5000);}
   else{
     const i=(c.companions||[]).findIndex(x=>x.id===t);
     if(i<0){renderTab();return;}
@@ -4424,8 +4491,11 @@ function runSelfTests(){
     ["Magic Awareness","Bolstering Magic"].forEach(n=>{const f=c.features.find(x=>x.name===n);
       eq(maxUses(c,f),3,n);eq(f.recharge,"long",n);});});
   t("Wild Surge DC is 8 + prof + Con",()=>{const c=wildBarb(5);eq(surgeDC(c),8+3+3);});
-  t("entering rage rolls a Wild Surge; ending it clears the surge",()=>{const c=wildBarb(3);
-    toggleBuff("Rage");ok(c.wildSurge&&c.wildSurge.n>=1&&c.wildSurge.n<=8,"surge rolled");ok(surgeNow(c),"surge in play");
+  t("entering rage asks for the Wild Surge; rolling sets it; ending the rage clears it",()=>{const c=wildBarb(3);
+    let shown="";const keep=openModal;openModal=h=>{shown=h;};
+    try{toggleBuff("Rage");}finally{openModal=keep;}
+    ok(/Roll for me/.test(shown)&&/pick what you rolled/.test(shown),"both choices offered");eq(c.wildSurge,null,"nothing chosen yet");
+    rollWildSurge("rage");ok(c.wildSurge&&c.wildSurge.n>=1&&c.wildSurge.n<=8,"surge rolled");ok(surgeNow(c),"surge in play");
     toggleBuff("Rage");eq(c.wildSurge,null);eq(surgeNow(c),null);});
   t("protective lights (6) gives +1 AC only while raging",()=>{const c=wildBarb(3);const base=acVal(c);
     toggleBuff("Rage");setSurge(6);eq(acVal(c),base+1);
@@ -4454,7 +4524,58 @@ function runSelfTests(){
       window.confirm=()=>true;toggleBuff("Rage");ok(buffOn(c,"Rage"));eq(c.features[0].usesLeft,0);}finally{window.confirm=keep;}});
   t("Use on the Rage feature also rolls the Wild Surge",()=>{const c=wildBarb(3);
     c.features.push({name:"Rage",uses:3,recharge:"long",effects:[],source:"class",cls:"Barbarian"});
-    useFeature(c.features.length-1);ok(buffOn(c,"Rage"));ok(surgeNow(c),"surge rolled");});
+    useFeature(c.features.length-1);ok(buffOn(c,"Rage"));eq(c.wildSurge,null,"waits for the choice");
+    pickSurge(5,"rage");eq(surgeNow(c).n,5);});
+  t("a Wild Surge rolled at the table is picked and logged as such",()=>{const c=wildBarb(3);toggleBuff("Rage");
+    pickSurge(7,"rage");eq(surgeNow(c).n,7);ok(/rolled at table/.test(db.rollLog[0].label),"logged");eq(db.rollLog[0].total,7);});
+  t("picking a surge rejects anything outside 1–8 and needs rage",()=>{const c=wildBarb(3);
+    pickSurge(4);eq(c.wildSurge||null,null,"no rage, no surge");toggleBuff("Rage");
+    pickSurge(9);pickSurge(0);pickSurge("x");eq(c.wildSurge,null);pickSurge(3);eq(surgeNow(c).n,3);});
+  t("Unstable Backlash picked at the table replaces the current effect",()=>{const c=wildBarb(10);toggleBuff("Rage");
+    pickSurge(2,"rage");pickSurge(8,"backlash");eq(surgeNow(c).n,8);});
+  t("Controlled Surge at the table: any effect can be picked",()=>{const c=wildBarb(14);toggleBuff("Rage");
+    pickSurge(1);eq(surgeNow(c).n,1);});
+
+  /* ---- attack breakdown & Rage rules ---- */
+  const brute=(str,dex,lv,more)=>mk(x=>{x.classes=[{name:"Barbarian",subclass:"",level:lv||3}];x.abilities.str=str;x.abilities.dex=dex;
+    x.attacks.push({name:"Greataxe",ability:"str",proficient:true,kind:"melee",magic:0,addAbility:true,bonusMisc:0,dmgParts:[{d:"1d12",t:"slashing"}]});
+    x.attacks.push({name:"Rapier",ability:"dex",proficient:true,kind:"melee",magic:0,addAbility:true,bonusMisc:0,dmgParts:[{d:"1d8",t:"piercing"}]});
+    x.attacks.push({name:"Handaxe (thrown)",ability:"str",proficient:true,kind:"ranged",magic:0,addAbility:true,bonusMisc:0,dmgParts:[{d:"1d6",t:"slashing"}]});
+    if(more)more(x);});
+  t("Rage adds damage only to Strength attacks",()=>{const c=brute(16,16);c.activeBuffs=["Rage"];
+    eq(attackDmgExtra(c,c.attacks[0]),3+2,"Str greataxe gets +2");
+    eq(attackDmgExtra(c,c.attacks[1]),3,"Dex rapier gets nothing");});
+  t("2014 Rage skips thrown (ranged) attacks; 2024 Rage includes them",()=>{const c=brute(16,10);c.activeBuffs=["Rage"];
+    eq(attackDmgExtra(c,c.attacks[2]),3,"2014: ranged attack, no rage");
+    c.edition="2024";eq(attackDmgExtra(c,c.attacks[2]),5,"2024: any Strength attack");});
+  t("Rage damage follows the Barbarian level, not the total level",()=>{
+    const c=brute(10,10,8,x=>x.classes.push({name:"Fighter",subclass:"",level:8}));c.activeBuffs=["Rage"];
+    eq(attackDmgExtra(c,c.attacks[0]),2,"Barbarian 8 / Fighter 8 → +2");
+    c.classes[0].level=9;eq(attackDmgExtra(c,c.attacks[0]),3,"Barbarian 9 → +3");
+    c.classes[0].level=16;eq(attackDmgExtra(c,c.attacks[0]),4);});
+  t("class names work in formulas and are 0 when you lack the class",()=>{const c=brute(10,10,5);
+    eq(evalFormula(c,"barbarian"),5);eq(evalFormula(c,"wizard"),0);eq(evalFormula(c,"barbarian+prof"),5+3);});
+  t("attack breakdown names Rage under Damage only while raging",()=>{const c=brute(16,10);
+    const off=attackBreakdown(c,c.attacks[0]);ok(!off.dmg.some(r=>/Rage/.test(r[0])),"not raging: no row");
+    c.activeBuffs=["Rage"];const on=attackBreakdown(c,c.attacks[0]);
+    ok(on.dmg.some(r=>/😡 Rage/.test(r[0])&&r[1]===2),"raging: a 😡 Rage +2 row");
+    ok(!on.hit.some(r=>/Rage/.test(r[0])),"Rage never touches to hit");
+    eq(on.dmgTotal,"1d12+5 slashing");
+    ok(!attackBreakdown(c,c.attacks[1]).dmg.some(r=>/Rage/.test(r[0])),"Dex attack: no Rage row");});
+  t("every buff type shows in the breakdown: flat bonuses, d20 dice and damage dice",()=>{const c=brute(16,10);
+    c.customBuffs=[{name:"War blessing",ic:"🔆",fx:[{t:"atk.all",v:1},{t:"dmg.melee",v:2}],d20:null,dmgDice:""}];
+    c.activeBuffs=["Bless","Enlarge","Bane","War blessing"];const b=attackBreakdown(c,c.attacks[0]);
+    ok(b.hit.some(r=>/Bless/.test(r[0])&&r[1]==="+1d4"),"Bless die on to hit");
+    ok(b.hit.some(r=>/Bane/.test(r[0])&&r[1]==="-1d4"),"Bane die on to hit");
+    ok(b.hit.some(r=>/War blessing/.test(r[0])&&r[1]===1),"custom flat to hit");
+    ok(b.dmg.some(r=>/Enlarge/.test(r[0])&&r[1]==="+1d4"),"Enlarge die on damage");
+    ok(b.dmg.some(r=>/War blessing/.test(r[0])&&r[1]===2),"custom flat damage");
+    eq(b.hitTotal,fmt(attackBonus(c,c.attacks[0]))+" +1d4 -1d4");});
+  t("the attack line keeps the total and marks the buffs in it",()=>{const c=brute(16,10);
+    eq(attackDmgLabel(c,c.attacks[0]),"1d12+3 slashing","no buffs: no marks");
+    c.activeBuffs=["Rage"];ok(/^1d12\+5 slashing .*😡/.test(attackDmgLabel(c,c.attacks[0])),"raging: total and 😡");
+    eq(attackDmgLabel(c,c.attacks[1]),"1d8 piercing","Dex rapier: unchanged, no 😡");
+    c.activeBuffs=["Reduce"];ok(/^1d12\+3 slashing − 1d4/.test(attackDmgLabel(c,c.attacks[0])),"negative dice read cleanly");});
   t("Main Damage… goes through the commit: temp HP first, then undo",()=>{const c=mk(x=>{x.hp={max:20,current:20,temp:3};});
     const keep=window.prompt;try{window.prompt=()=>"5";hpPrompt(-1);eq(c.hp.temp,0);eq(c.hp.current,18);
       undoHp();eq(c.hp.current,20);eq(c.hp.temp,3);
