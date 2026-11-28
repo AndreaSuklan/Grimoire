@@ -54,6 +54,14 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.9 — Spell attacks linked to your spells
+- **⚔️ Set up attack** (spell ⋮ menu on the Spells tab) creates the spell's attack on Main → Attacks, prefilled from the spell's text: damage dice and type, attack roll / saving throw / hits automatically, half damage on a save, upcast dice, rays or darts, cantrip upgrade, condition. Check it and save — nothing is saved without you seeing it.
+- **Cast picks the slot**: Cast on a spell with an attack lists the slots you can spend with the damage at each level, spends the one you pick, and opens the attack at that level. The roll buttons on Main never spend slots; the breakdown has level pills to see or roll any level for free.
+- **Scaling**: upcast dice per damage type ("+1d6 per slot level above"), extra rays/darts per level (Scorching Ray, Magic Missile), cantrip upgrades at levels 5/11/17 (more dice, or one more beam for Eldritch Blast). Each is a named line in the Damage breakdown.
+- **Use my spellcasting stats** (default for new spell attacks): the DC and to-hit are exactly the Spells tab's. Misc bonus counts towards the DC for save spells.
+- **Save outcome and conditions** (half / none / custom text, plus a condition with duration) show on the attack, in the breakdown and in the damage roll as reminders — the app doesn't track enemies.
+- Renaming a spell keeps its attack linked; removing it keeps the attack on Main, unlinked, still upcasting from its level.
+
 ### New in v1.8 — The Celestial warlock, spell attacks
 
 - **☀️ The Celestial (Warlock, 2014 / Xanathar's) and Celestial Patron (2024) built in**: every feature at the right levels, written as summaries in our own words (paste your book's text via ✏️ if you prefer).

@@ -913,7 +913,8 @@ function migrate(c){ /* upgrade older saves in place — must survive partial, o
   c.attacks.forEach(a=>{
     if(!a.dmgParts){a.dmgParts=a.damage?[{d:a.damage,t:a.type||""}]:[];delete a.damage;delete a.type;}
     if(!["melee","ranged","spell"].includes(a.kind))a.kind="melee";
-    if(a.kind!=="spell"||!ABILITIES.includes(a.save))delete a.save;});
+    if(a.kind!=="spell"||!ABILITIES.includes(a.save))delete a.save;
+    sanitizeSpellAtk(a);});
   /* Items need a stable id: attacks used to link by name, so the first rename or re-save
      orphaned the link. Backfill the id and re-point any attack that used the old key. */
   inv.items.forEach(it=>{
@@ -922,6 +923,23 @@ function migrate(c){ /* upgrade older saves in place — must survive partial, o
     enrichItem(it,false);});
   c.schema=SCHEMA_VERSION;
   return c;}
+/* Spell-attack fields only live on spell attacks, and only in a shape the math understands — a bad value is
+   dropped (the attack falls back to the plain behaviour) instead of turning into NaN dice or endless rays. */
+function sanitizeSpellAtk(a){
+  const SP=["spellRef","spellLevel","useCasting","autoHit","onSave","onSaveText","cond","condNote","rays","upRays","cantripScale"];
+  (a.dmgParts||[]).forEach(p=>{if(a.kind!=="spell"||typeof p.up!=="string"||!/^\s*\d*d\d+\s*$/i.test(p.up))delete p.up;});
+  if(a.kind!=="spell"){SP.forEach(k=>delete a[k]);return;}
+  if(typeof a.spellRef!=="string"||!a.spellRef.trim())delete a.spellRef;
+  if(a.spellLevel!==undefined){const l=Math.floor(+a.spellLevel);if(l>=0&&l<=9)a.spellLevel=l;else delete a.spellLevel;}
+  if(a.useCasting!==undefined)a.useCasting=!!a.useCasting;
+  if(!a.autoHit||ABILITIES.includes(a.save))delete a.autoHit;else a.autoHit=true;
+  if(!ABILITIES.includes(a.save)||!["half","none","text"].includes(a.onSave))delete a.onSave;
+  if(a.onSave!=="text"||typeof a.onSaveText!=="string")delete a.onSaveText;
+  if(!CONDITIONS.includes(a.cond))delete a.cond;
+  if(typeof a.condNote!=="string")delete a.condNote;
+  if(a.rays!==undefined){const r=Math.floor(+a.rays);if(r>1&&r<=20)a.rays=r;else delete a.rays;}
+  if(a.upRays!==undefined){const r=Math.floor(+a.upRays);if(r>0&&r<=10)a.upRays=r;else delete a.upRays;}
+  if(!["dice","rays"].includes(a.cantripScale))delete a.cantripScale;}
 function cur(){return db.characters.find(c=>c.id===db.currentId)||null;}
 
 function newCharacter(){
@@ -1373,44 +1391,63 @@ function explainSpell(which){const c=cur();const ab=c.spellcasting.ability;
 /* Tap an attack: two sections, To hit and Damage, with every bonus on its own named line. Only what is
    active right now is listed (Rage shows only while raging and only for Strength attacks), so the totals
    here always match the numbers on Main and what the dice buttons roll. */
-function attackBreakdown(c,a){const ctx=atkCtx(a);const spell=isSpellAtk(a);
+function attackBreakdown(c,a,lvl){const ctx=atkCtx(a,c);const spell=isSpellAtk(a);const plan=spellPlan(c,a,lvl);
   const hit=[];
   if(isSaveSpell(a)){ /* resolved by the target's saving throw: explain the DC instead of a to-hit */
     hit.push(["Base",8],["Proficiency",profBonus(c)]);
-    if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
+    if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier"+(a.useCasting?" (casting ability)":""),amod(c,ctx.ab)]);
+    if(+a.bonusMisc)hit.push(["Misc",+a.bonusMisc]);
     bonusDetail(c,"spell.dc").forEach(b=>hit.push([esc(b.src),b.v]));}
-  else{
-    if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
-    if(a.proficient)hit.push(["Proficiency",profBonus(c)]);
+  else if(!isAutoSpell(a)){
+    if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier"+(spell&&a.useCasting?" (casting ability)":""),amod(c,ctx.ab)]);
+    if(attackProf(c,a))hit.push(["Proficiency",profBonus(c)]);
     if(+a.bonusMisc)hit.push(["Misc",+a.bonusMisc]);
     if(+a.magic&&!spell)hit.push(["Magic weapon",+a.magic]);
     bonusDetail(c,atkTarget(a),ctx).forEach(b=>hit.push([esc(b.src),b.v]));}
-  const hitDice=isSaveSpell(a)?[]:buffD20Extras(c,"attack");
+  const hitDice=isSaveSpell(a)||isAutoSpell(a)?[]:buffD20Extras(c,"attack");
   hitDice.forEach(b=>hit.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
   const dmg=[];
-  (a.dmgParts||[]).forEach((p,j)=>dmg.push([j===0?(spell?"Spell dice":"Weapon dice"):"Extra dice",p.d+(p.t?" "+p.t:"")]));
-  if(a.addAbility&&ctx.ab)dmg.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
+  (a.dmgParts||[]).forEach((p,j)=>dmg.push([j===0?(spell?"Spell dice":"Weapon dice"):"Extra dice",p.d+(p.t?" "+p.t:"")])); /* base dice: scaling gets its own lines below */
+  if(spell&&plan.tier>1&&a.cantripScale==="dice")dmg.push(["Cantrip upgrade (character level "+totalLevel(c)+")","×"+plan.tier+" dice"]);
+  if(spell&&plan.above>0&&(a.dmgParts||[]).some(p=>p.up))
+    dmg.push(["Upcast: level "+plan.lvl+" slot (+"+plan.above+")",a.dmgParts.filter(p=>p.up).map(p=>"+"+scaleDice(p.up,plan.above)+(p.t?" "+p.t:"")).join(", ")]);
+  if(ctx.ab&&a.addAbility)dmg.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
   if(+a.magic&&!spell)dmg.push(["Magic weapon",+a.magic]);
   bonusDetail(c,dmgTarget(a),ctx).forEach(b=>dmg.push([esc(b.src)+dtLabel(b.dt),b.v]));
   attackDiceExtras(c,a).forEach(b=>dmg.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
-  return {hit,hitTotal:isSaveSpell(a)?attackHitLabel(c,a):fmt(attackBonus(c,a))+hitDice.map(b=>b.dice.startsWith("-")?" "+b.dice:" +"+b.dice).join(""),
+  if(plan.rays>1){const why=[];
+    if(plan.tier>1&&a.cantripScale==="rays")why.push("cantrip upgrade");
+    if(plan.above>0&&+a.upRays)why.push("upcast +"+plan.above*(+a.upRays));
+    dmg.push(["Number of hits (rays, beams, darts…)"+(why.length?" — "+why.join(", "):""),"×"+plan.rays]);}
+  return {hit,hitTotal:isSaveSpell(a)?attackHitLabel(c,a):isAutoSpell(a)?"Hits automatically":fmt(attackBonus(c,a))+hitDice.map(b=>b.dice.startsWith("-")?" "+b.dice:" +"+b.dice).join(""),
     hitTitle:isSaveSpell(a)?"🎯 Save DC":"🎯 To hit",
-    dmg,dmgTotal:attackDmgLabel(c,a,true)||"—"};}
-function explainAttack(i){const c=cur();const a=c.attacks[i];const b=attackBreakdown(c,a);
+    dmg,dmgTotal:attackDmgLabel(c,a,true,lvl)||"—",plan};}
+/* lvl: the slot level to show (spell attacks); cast: it was just cast with that slot (from Cast on the Spells tab) */
+function explainAttack(i,lvl,cast){const c=cur();const a=c.attacks[i];if(!a)return;const b=attackBreakdown(c,a,lvl);const plan=b.plan;
   const sect=(title,rows,total)=>`<h3 style="margin:12px 0 4px">${title}</h3>${fxRows(rows)}
    <div class="skrow" style="border-top:2px solid var(--line)"><div class="nm"><b>Total</b></div><div class="md" style="cursor:default">${total}</div></div>`;
   const ws=surgeNow(c);
-  const rageNoStr=buffOn(c,"Rage")&&atkCtx(a).ab!=="str"&&!isSpellAtk(a);
+  const rageNoStr=buffOn(c,"Rage")&&atkCtx(a,c).ab!=="str"&&!isSpellAtk(a);
+  const scales=isSpellAtk(a)&&plan.base>0&&((a.dmgParts||[]).some(p=>p.up)||+a.upRays>0);
+  const lvPills=scales?`<div class="filter-pills" style="margin-top:6px">${Array.from({length:10-plan.base},(_,k)=>plan.base+k).map(l=>
+    `<button class="pill ${l===plan.lvl?"on":""}" onclick="explainAttack(${i},${l})">Lv ${l}</button>`).join("")}</div>
+    <div class="dim">Slot level — changes the damage shown and rolled here, spends nothing.</div>`:"";
+  const sp=linkedSpell(c,a);const out=spellOutcome(a);
   openModal(`<h2>${esc(a.name)} ${XBTN}</h2>
+   ${isSpellAtk(a)?`<div class="dim">${plan.base===0?"Cantrip":"Level "+plan.base+" spell"}${cast?` · ✨ cast with a level ${plan.lvl} slot`:""}${sp?" · 🔗 "+esc(sp.name)+" (Spells tab)":""}</div>`:""}
+   ${lvPills}
    <div class="brk">${sect(b.hitTitle,b.hit,b.hitTotal)}
    ${sect("💥 Damage",b.dmg,b.dmgTotal)}</div>
+   ${out?`<p><b>${isSaveSpell(a)?ABL_NAMES[a.save]+" save":"Effect"}:</b> ${esc(out)}</p>`:""}
    ${ws&&ws.n===4?`<p class="dim">🗡️ Wild Surge — infused weapon: if this is the weapon you infused, its damage type is force until the rage ends.</p>`:""}
    ${rageNoStr?`<p class="dim">😡 Rage adds no damage here: it only applies to attacks made with Strength.</p>`:""}
    ${a.mastery?`<p><b>⚔️ ${a.mastery} (mastery).</b> ${esc(MASTERIES[a.mastery]||"")}</p>`:""}
    ${isSaveSpell(a)?`<p class="dim">Each target makes a ${ABL_NAMES[a.save]} saving throw against your DC — there is no attack roll.</p>`:""}
+   ${isAutoSpell(a)?`<p class="dim">No attack roll and no save: it hits automatically.</p>`:""}
+   ${plan.rays>1&&!isAutoSpell(a)&&!isSaveSpell(a)?`<p class="dim">${plan.rays} separate attacks — roll to hit once for each; the damage roll rolls every one.</p>`:""}
    <div class="row" style="margin-top:10px">
-    ${isSaveSpell(a)?"":`<button class="btn ghost" onclick="closeModal();rollAttackHit(${i})">🎲 Roll to hit</button>`}
-    ${(a.dmgParts||[]).length?`<button class="btn ghost" onclick="closeModal();rollAttackDamage(${i})">🎲 Roll damage</button>`:""}</div>
+    ${isSaveSpell(a)||isAutoSpell(a)?"":`<button class="btn ghost" onclick="closeModal();rollAttackHit(${i})">🎲 Roll to hit</button>`}
+    ${(a.dmgParts||[]).length?`<button class="btn ghost" onclick="closeModal();rollAttackDamage(${i},${plan.lvl||0})">🎲 Roll damage</button>`:""}</div>
    <p class="dim" style="margin-top:10px">Bonuses come from features, feats, equipped items and active effects (Main). Only what applies right now is listed.</p>`);}
 function explainHP(){const c=cur();
   const rows=[["Base max HP",+c.hp.max||1]];
@@ -1995,8 +2032,8 @@ function renderMain(){const c=cur();const pb=profBonus(c);
       const am=ammoItem(c,a);
       return `<div class="li"><div class="li-head">
         <div class="li-title" onclick="explainAttack(${i})" style="cursor:pointer">${esc(a.name)} <span class="tag">${isSpellAtk(a)?"spell":a.kind==="ranged"?"ranged":"melee"}</span>${a.mastery?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="${esc(MASTERIES[a.mastery]||"")}">${a.mastery}</span>`:""}
-          <div class="li-sub">${attackDmgLabel(c,a)} ${a.notes?"· "+esc(a.notes):""}${am?` · 🏹 ${+am.qty||0} ${esc(am.name)}`:""}</div></div>
-        <button class="btn ghost small" onclick="rollAttackHit(${i})">${isSaveSpell(a)?attackHitLabel(c,a):fmt(hit)}</button>
+          <div class="li-sub">${attackDmgLabel(c,a)} ${spellOutcomeShort(a)?"· "+esc(spellOutcomeShort(a)):""} ${a.notes?"· "+esc(a.notes):""}${am?` · 🏹 ${+am.qty||0} ${esc(am.name)}`:""}</div></div>
+        <button class="btn ghost small" onclick="rollAttackHit(${i})">${isSaveSpell(a)||isAutoSpell(a)?attackHitLabel(c,a):fmt(hit)}</button>
         ${(a.dmgParts||[]).length?`<button class="btn ghost small" onclick="rollAttackDamage(${i})">DMG</button>`:""}
         <button class="iconbtn" onclick="editAttack(${i})">✏️</button>
       </div></div>`;}).join(""):'<div class="empty">No attacks yet — add manually or equip a weapon in Items</div>'}</div>
@@ -2164,36 +2201,78 @@ function compSave(i){const c=cur();
 function ammoItem(c,a){if(!a.ammoId)return null;
   return (c.inventory.items||[]).find(it=>(it.id||it.name)===a.ammoId)||null;}
 function rollAttackHit(i){const c=cur();const a=c.attacks[i];
-  if(isSaveSpell(a)){explainAttack(i);return;} /* nothing to roll: the targets save */
+  if(isSaveSpell(a)||isAutoSpell(a)){explainAttack(i);return;} /* nothing to roll: the targets save, or it just hits */
   const am=ammoItem(c,a);
   let note="";
   if(am){
     if((+am.qty||0)<=0){toast("🏹 Out of "+esc(am.name)+"!");return;}
     am.qty=(+am.qty||0)-1;touch();renderTab();
     note="🏹 "+am.qty+" "+esc(am.name)+" left";}
+  const n=spellPlan(c,a).rays;
+  if(n>1)note=(note?note+" · ":"")+"×"+n+" — roll once for each";
   d20Roll(a.name+" attack",attackBonus(c,a),note);}
-/* The attack's own context: which ability it uses and which damage types it deals.
-   Effects tied to an ability (Rage → Strength) or to damage types (Radiant Soul → radiant/fire) read it. */
-function atkCtx(a){const dt=[...new Set((a.dmgParts||[]).flatMap(p=>normDt(p.t)||[]))];
-  return {ab:a.ability&&a.ability!=="none"?a.ability:null,dt};}
 /* Spell attacks (kind "spell") use the spellcasting pipeline: spell.atk / spell.dc / dmg.spell, never the weapon
-   bonuses (atk.*, dmg.all, magic weapon, weapon damage dice). a.save = ability → resolved by a saving throw. */
+   bonuses (atk.*, dmg.all, magic weapon, weapon damage dice). How a spell attack resolves:
+   a.save = ability → the targets make a saving throw · a.autoHit → it simply hits (Magic Missile) · else an attack roll.
+   a.useCasting → ability and proficiency follow the Spells tab (casting ability, always proficient), so the DC here
+   is exactly the spell save DC. a.spellRef links the attack to a spell on the Spells tab by name: the spell's level
+   drives upcasting, and Cast on the spell opens this attack at the slot level spent. */
 const isSpellAtk=a=>!!a&&a.kind==="spell";
 const isSaveSpell=a=>isSpellAtk(a)&&ABILITIES.includes(a.save);
+const isAutoSpell=a=>isSpellAtk(a)&&!isSaveSpell(a)&&!!a.autoHit;
 const atkTarget=a=>isSpellAtk(a)?"spell.atk":"atk."+(a.kind||"melee");
 const dmgTarget=a=>isSpellAtk(a)?"dmg.spell":"dmg."+(a.kind||"melee");
-function attackBonus(c,a){let b=+a.bonusMisc||0;
-  if(a.ability&&a.ability!=="none")b+=amod(c,a.ability);
-  if(a.proficient)b+=profBonus(c);
-  b+=(isSpellAtk(a)?0:(+a.magic||0))+bonusFor(c,atkTarget(a),atkCtx(a));return b;}
-function attackSaveDC(c,a){const ab=a.ability&&a.ability!=="none"?amod(c,a.ability):0;
-  return 8+profBonus(c)+ab+bonusFor(c,"spell.dc");}
-function attackHitLabel(c,a){return isSaveSpell(a)?"DC "+attackSaveDC(c,a)+" "+a.save.toUpperCase():fmt(attackBonus(c,a));}
+function attackAbility(c,a){
+  if(isSpellAtk(a)&&a.useCasting)return ABILITIES.includes(c.spellcasting.ability)?c.spellcasting.ability:null;
+  return a.ability&&a.ability!=="none"?a.ability:null;}
+function attackProf(c,a){return isSpellAtk(a)&&a.useCasting?true:!!a.proficient;}
+/* The attack's own context: which ability it uses and which damage types it deals.
+   Effects tied to an ability (Rage → Strength) or to damage types (Radiant Soul → radiant/fire) read it. */
+function atkCtx(a,c){const dt=[...new Set((a.dmgParts||[]).flatMap(p=>normDt(p.t)||[]))];
+  return {ab:attackAbility(c||cur(),a),dt};}
+function linkedSpell(c,a){
+  return isSpellAtk(a)&&a.spellRef?((c.spellcasting||{}).spells||[]).find(s=>s.name===a.spellRef)||null:null;}
+function linkedAttackIndex(c,spellName){return (c.attacks||[]).findIndex(a=>isSpellAtk(a)&&a.spellRef===spellName);}
+/* the linked spell's level wins (it can be edited on the Spells tab); a.spellLevel is the fallback for unlinked attacks */
+function spellLevelOf(c,a){const s=linkedSpell(c,a);
+  return Math.max(0,Math.min(9,Math.floor(s?(+s.level||0):(+a.spellLevel||0))));}
+function cantripTier(c){const l=totalLevel(c);return l>=17?4:l>=11?3:l>=5?2:1;}
+const DIE_RE=/^\s*(\d*)d(\d+)\s*$/i;
+function scaleDice(expr,n){return String(expr||"").replace(/(\d*)d(\d+)/gi,(m,k,d)=>((+k||1)*n)+"d"+d);}
+/* "8d6" + 2×"1d6" → "10d6"; different dice are added on: "1d8+5" + 1×"1d6" → "1d8+5+1d6" */
+function addDice(expr,up,times){if(!up||!(times>0))return expr;
+  const m=DIE_RE.exec(expr||""),u=DIE_RE.exec(up);if(!u)return expr;
+  const add=((+u[1]||1)*times)+"d"+u[2];
+  if(m&&m[2]===u[2])return ((+m[1]||1)+(+u[1]||1)*times)+"d"+m[2];
+  return expr?expr+"+"+add:add;}
+/* What a spell attack does at a given slot level: final dice per damage part, number of rays/beams/darts,
+   and the reasons (upcast, cantrip upgrade) so the breakdown can name them. Weapons pass through unchanged. */
+function spellPlan(c,a,lvl){const parts=(a.dmgParts||[]).map(p=>({...p}));
+  if(!isSpellAtk(a))return {parts,rays:1,base:0,lvl:0,above:0,tier:1};
+  const base=spellLevelOf(c,a);
+  const L=base>0?Math.max(base,Math.min(9,Math.floor(+lvl||base))):0;
+  const above=L-base,tier=base===0?cantripTier(c):1;
+  parts.forEach(p=>{let d=p.d;
+    if(tier>1&&a.cantripScale==="dice")d=scaleDice(d,tier);
+    if(above>0&&p.up)d=addDice(d,p.up,above);
+    p.d=d;});
+  let rays=Math.max(1,Math.floor(+a.rays||1));
+  if(tier>1&&a.cantripScale==="rays")rays+=tier-1;
+  if(above>0)rays+=above*Math.max(0,Math.floor(+a.upRays||0));
+  return {parts,rays,base,lvl:L,above,tier};}
+function attackBonus(c,a){let b=+a.bonusMisc||0;const ab=attackAbility(c,a);
+  if(ab)b+=amod(c,ab);
+  if(attackProf(c,a))b+=profBonus(c);
+  b+=(isSpellAtk(a)?0:(+a.magic||0))+bonusFor(c,atkTarget(a),atkCtx(a,c));return b;}
+/* misc bonus means "to hit" on an attack roll and "to the DC" on a save spell */
+function attackSaveDC(c,a){const ab=attackAbility(c,a);
+  return 8+profBonus(c)+(ab?amod(c,ab):0)+(+a.bonusMisc||0)+bonusFor(c,"spell.dc");}
+function attackHitLabel(c,a){return isSaveSpell(a)?"DC "+attackSaveDC(c,a)+" "+a.save.toUpperCase():isAutoSpell(a)?"Auto":fmt(attackBonus(c,a));}
 function attackDiceExtras(c,a){return isSpellAtk(a)?[]:buffDmgExtras(c);} /* buff dice (Enlarge…) are weapon damage */
 /* Flat damage per damage part. Ordinary bonuses ride on the first part; a bonus limited to damage types
    (Radiant Soul) rides on the first part of a matching type, so it is shown — and rolled — where it belongs. */
 function attackDmgFlats(c,a){const parts=a.dmgParts||[];const out=parts.map(()=>0);if(!parts.length)return out;
-  const ctx=atkCtx(a);
+  const ctx=atkCtx(a,c);
   out[0]+=isSpellAtk(a)?0:(+a.magic||0);
   if(a.addAbility&&ctx.ab)out[0]+=amod(c,ctx.ab);
   bonusDetail(c,dmgTarget(a),ctx).forEach(b=>{
@@ -2202,35 +2281,50 @@ function attackDmgFlats(c,a){const parts=a.dmgParts||[];const out=parts.map(()=>
   return out;}
 function attackDmgExtra(c,a){ /* total flat bonus across the damage parts */
   if(!(a.dmgParts||[]).length){ /* no dice yet: still report the flat bonus (used by the breakdown tests) */
-    let x=(isSpellAtk(a)?0:(+a.magic||0))+bonusFor(c,dmgTarget(a),atkCtx(a));
-    if(a.addAbility&&a.ability&&a.ability!=="none")x+=amod(c,a.ability);return x;}
+    const ab=attackAbility(c,a);
+    let x=(isSpellAtk(a)?0:(+a.magic||0))+bonusFor(c,dmgTarget(a),atkCtx(a,c));
+    if(a.addAbility&&ab)x+=amod(c,ab);return x;}
   return attackDmgFlats(c,a).reduce((s,x)=>s+x,0);}
 /* Icons of the temporary effects (buffs) that are changing this attack right now, e.g. 😡 while raging. */
 function attackBuffIcons(c,a,which){
   const ics=[];const push=ic=>{if(ic&&!ics.includes(ic))ics.push(ic);};
-  if(which!=="dmg"&&!isSaveSpell(a)){bonusDetail(c,atkTarget(a),atkCtx(a)).forEach(b=>b.buff&&push(b.ic));
+  if(which!=="dmg"&&!isSaveSpell(a)&&!isAutoSpell(a)){bonusDetail(c,atkTarget(a),atkCtx(a,c)).forEach(b=>b.buff&&push(b.ic));
     buffD20Extras(c,"attack").forEach(b=>push(b.ic));}
-  if(which!=="hit"){bonusDetail(c,dmgTarget(a),atkCtx(a)).forEach(b=>b.buff&&push(b.ic));
+  if(which!=="hit"){bonusDetail(c,dmgTarget(a),atkCtx(a,c)).forEach(b=>b.buff&&push(b.ic));
     attackDiceExtras(c,a).forEach(b=>push(b.ic));}
   return ics;}
-function attackDmgLabel(c,a,noIcons){const parts=a.dmgParts||[];if(!parts.length)return "";
+function attackDmgLabel(c,a,noIcons,lvl){const plan=spellPlan(c,a,lvl);const parts=plan.parts;if(!parts.length)return "";
   const fl=attackDmgFlats(c,a);
-  const txt=parts.map((p,j)=>esc(p.d)+(fl[j]?fmt(fl[j]):"")+(p.t?" "+esc(p.t):""))
+  let txt=parts.map((p,j)=>esc(p.d)+(fl[j]?fmt(fl[j]):"")+(p.t?" "+esc(p.t):""))
     .concat(attackDiceExtras(c,a).map(b=>esc(b.dice).replace(/^\+/,"").replace(/^-/,"− ")))
     .join(" + ").replace(/\+ − /g,"− ");
+  if(plan.rays>1)txt=(parts.length>1?"("+txt+")":txt)+" ×"+plan.rays;
   const ics=noIcons?[]:attackBuffIcons(c,a,"dmg");
   return txt+(ics.length?` <span title="includes temporary effects — tap the attack for the breakdown">${ics.join("")}</span>`:"");}
-function rollAttackDamage(i){const c=cur();const a=c.attacks[i];
-  const parts=a.dmgParts||[];if(!parts.length){toast("No damage set");return;}
+/* What happens beyond the damage: half on a save, a condition on a hit / failed save. Plain text — the app
+   doesn't track enemies, so nothing is applied to anyone. */
+function spellOutcome(a){if(!isSpellAtk(a))return "";const l=[];
+  if(isSaveSpell(a))l.push(a.onSave==="half"?"half damage on a successful save":a.onSave==="text"&&a.onSaveText?"on a successful save: "+a.onSaveText:"no damage on a successful save");
+  if(a.cond||a.condNote)l.push((isSaveSpell(a)?"on a failed save: ":"on a hit: ")+[a.cond,a.condNote].filter(Boolean).join(" — "));
+  return l.join(" · ");}
+function spellOutcomeShort(a){if(!isSpellAtk(a))return "";
+  return [isSaveSpell(a)&&a.onSave==="half"?"half on save":"",a.cond||""].filter(Boolean).join(" · ");}
+function rollAttackDamage(i,lvl){const c=cur();const a=c.attacks[i];
+  const plan=spellPlan(c,a,lvl);const parts=plan.parts;if(!parts.length){toast("No damage set");return;}
   let total=0;const lines=[];const fl=attackDmgFlats(c,a);
-  parts.forEach((p,j)=>{const r=rollExpr(p.d)||{total:0,detail:"?"};
-    const extra=fl[j]||0;
-    const t=r.total+extra;total+=t;
-    lines.push(`<div><b>${t}</b> ${esc(p.t||"damage")} <span class="dim">${esc(r.detail)}${extra?" "+fmt(extra):""}</span></div>`);});
-  attackDiceExtras(c,a).forEach(b=>{const r=rollExpr(b.dice);
-    if(r){total+=r.total;lines.push(`<div><b>${r.total}</b> <span class="dim">${b.ic} ${esc(b.name)} ${esc(b.dice)}</span></div>`);}});
-  logRoll(a.name+" damage",total);
-  toast(`<div><b>${esc(a.name)} damage</b></div>`+bigHtml(total)+lines.join(""),6000);}
+  for(let k=0;k<plan.rays;k++){let sub=0;
+    if(plan.rays>1)lines.push(`<div class="dim" style="margin-top:4px">#${k+1}</div>`);
+    parts.forEach((p,j)=>{const r=rollExpr(p.d)||{total:0,detail:"?"};
+      const extra=fl[j]||0;
+      const t=r.total+extra;sub+=t;
+      lines.push(`<div><b>${t}</b> ${esc(p.t||"damage")} <span class="dim">${esc(r.detail)}${extra?" "+fmt(extra):""}</span></div>`);});
+    attackDiceExtras(c,a).forEach(b=>{const r=rollExpr(b.dice);
+      if(r){sub+=r.total;lines.push(`<div><b>${r.total}</b> <span class="dim">${b.ic} ${esc(b.name)} ${esc(b.dice)}</span></div>`);}});
+    total+=sub;}
+  const lvTxt=plan.above>0?" (level "+plan.lvl+")":"";
+  logRoll(a.name+" damage"+lvTxt,total);
+  const out=spellOutcome(a);
+  toast(`<div><b>${esc(a.name)} damage${lvTxt}</b></div>`+bigHtml(total)+(plan.rays>1?`<div class="dim">${plan.rays} total — each one hits separately</div>`:"")+lines.join("")+(out?`<div class="dim" style="margin-top:4px">${esc(out)}</div>`:""),plan.rays>1?9000:6000);}
 function editAbilities(mode){const c=cur();mode=mode||"manual";
   const pills=["manual","array","pointbuy"].map(m=>`<button class="pill ${mode===m?"on":""}" onclick="editAbilities('${m}')">${m==="manual"?"✍️ Manual":m==="array"?"📋 Standard array":"🧮 Point buy"}</button>`).join("");
   let body="";
@@ -2536,19 +2630,56 @@ function dmgPartRow(p){return `<div class="row dmgpart" style="margin-bottom:6px
   <input class="dpD" placeholder="1d8 or 2d6+1" value="${esc(p&&p.d||"")}">
   <input class="dpT" placeholder="type (slashing, fire…)" value="${esc(p&&p.t||"")}">
   <button class="iconbtn" style="flex:none" onclick="this.parentElement.remove()">✕</button></div>`;}
-function editAttack(i){const c=cur();const a=i>=0?c.attacks[i]:{name:"",ability:"str",proficient:true,bonusMisc:0,kind:"melee",addAbility:true,magic:0,dmgParts:[{d:"",t:""}],notes:""};
+/* attack editor damage row: weapons use dmgPartRow's two fields; spells add "+dice per slot level above" */
+function atkPartRow(p){return `<div class="dmgpart" style="margin-bottom:6px"><div class="row">
+  <input class="dpD" placeholder="1d8 or 2d6+1" value="${esc(p&&p.d||"")}">
+  <input class="dpT" placeholder="type (slashing, fire…)" value="${esc(p&&p.t||"")}">
+  <button class="iconbtn" style="flex:none" onclick="this.closest('.dmgpart').remove()">✕</button></div>
+  <input class="dpU atkSpellOnly" style="margin-top:4px" placeholder="upcast: + dice per slot level above the spell's level, e.g. 1d6" value="${esc(p&&p.up||"")}"></div>`;}
+let _atkDraft=null; /* a prefilled new attack (⚔️ Set up attack on a spell) */
+const ATK_NEW=()=>({name:"",ability:"str",proficient:true,bonusMisc:0,kind:"melee",addAbility:true,magic:0,dmgParts:[{d:"",t:""}],notes:""});
+function editAttack(i){const c=cur();const a=i>=0?c.attacks[i]:(_atkDraft||ATK_NEW());const guessed=i<0&&_atkDraft&&_atkDraft._guessed;_atkDraft=null;
+  const spells=(c.spellcasting.spells||[]);
+  const res=isSaveSpell(a)?a.save:isAutoSpell(a)?"auto":"";
   openModal(`<h2>${i>=0?"Edit":"New"} attack ${XBTN}</h2>
+   ${guessed?`<p class="dim" style="margin-top:0">✨ Filled in from the spell's text — check the dice, the save and the upcast before saving.</p>`:""}
    <label>Name</label><input id="atkName" value="${esc(a.name)}"><div class="spacer"></div>
    <div class="grid3">
     <div><label>Ability</label><select id="atkAb"><option value="none" ${a.ability==="none"?"selected":""}>None</option>${ABILITIES.map(x=>`<option value="${x}" ${a.ability===x?"selected":""}>${ABL_NAMES[x]}</option>`).join("")}</select></div>
     <div><label>Type</label><select id="atkKind" onchange="atkKindChanged(${i})"><option value="melee" ${a.kind!=="ranged"&&a.kind!=="spell"?"selected":""}>Melee</option><option value="ranged" ${a.kind==="ranged"?"selected":""}>Ranged</option><option value="spell" ${a.kind==="spell"?"selected":""}>Spell</option></select></div>
     <div class="atkWeaponOnly"><label>Magic (+N)</label><input id="atkMagic" type="number" value="${a.magic||0}"></div></div>
-   <div class="atkSpellOnly" style="margin-top:8px"><label>Resolved by</label><select id="atkSave">
-     <option value="">Spell attack roll</option>${ABILITIES.map(x=>`<option value="${x}" ${a.save===x?"selected":""}>${ABL_NAMES[x]} saving throw (uses your spell save DC)</option>`).join("")}</select>
+   <div class="atkSpellOnly" style="margin-top:8px">
+     <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px"><input type="checkbox" id="atkUseCast" ${a.useCasting?"checked":""} onchange="atkKindShow()"> Use my spellcasting stats (${esc(String(c.spellcasting.ability||"").toUpperCase())}, proficient — same as the Spells tab)</label>
+     <div class="spacer"></div>
+     <div class="grid2">
+      <div><label>Spell on the Spells tab</label><select id="atkSpellRef" onchange="atkKindShow()"><option value="">Not linked</option>${spells.map(s=>`<option value="${esc(s.name)}" ${a.spellRef===s.name?"selected":""}>${esc(s.name)} (${s.level?"lv "+s.level:"cantrip"})</option>`).join("")}${a.spellRef&&!spells.some(s=>s.name===a.spellRef)?`<option value="" selected>⚠️ ${esc(a.spellRef)} — no longer on the Spells tab</option>`:""}</select></div>
+      <div class="atkSpLvBox"><label>Spell level</label><select id="atkSpLv">${[0,1,2,3,4,5,6,7,8,9].map(l=>`<option value="${l}" ${(+a.spellLevel||0)===l?"selected":""}>${l===0?"Cantrip":l}</option>`).join("")}</select></div></div>
+     <div class="spacer"></div>
+     <label>Resolved by</label><select id="atkSave" onchange="atkKindShow()">
+      <option value="">Spell attack roll</option>${ABILITIES.map(x=>`<option value="${x}" ${res===x?"selected":""}>${ABL_NAMES[x]} saving throw (your spell save DC)</option>`).join("")}
+      <option value="auto" ${res==="auto"?"selected":""}>Hits automatically (no roll, no save)</option></select>
+     <div class="atkSaveOnly" style="margin-top:6px"><div class="grid2">
+      <div><label>On a successful save</label><select id="atkOnSave" onchange="atkKindShow()">
+       <option value="half" ${a.onSave==="half"?"selected":""}>Half damage</option>
+       <option value="none" ${a.onSave!=="half"&&a.onSave!=="text"?"selected":""}>No damage</option>
+       <option value="text" ${a.onSave==="text"?"selected":""}>Other…</option></select></div>
+      <div class="atkOnSaveTxt"><label>What happens</label><input id="atkOnSaveTxt" value="${esc(a.onSaveText||"")}" placeholder="e.g. pushed 5 ft, no other effect"></div></div></div>
+     <div class="spacer"></div>
+     <div class="grid2">
+      <div><label id="atkCondLbl">Condition</label><select id="atkCond"><option value="">None</option>${CONDITIONS.map(x=>`<option ${a.cond===x?"selected":""}>${x}</option>`).join("")}</select></div>
+      <div><label>Duration / details</label><input id="atkCondNote" value="${esc(a.condNote||"")}" placeholder="e.g. until the end of your next turn"></div></div>
+     <div class="dim" style="margin-top:3px">Shown as a reminder — the app doesn't track enemies, so nothing is applied to them.</div>
+     <div class="spacer"></div>
+     <div class="grid3">
+      <div><label>Rays / beams / darts</label><input id="atkRays" type="number" min="1" max="20" value="${Math.max(1,+a.rays||1)}"></div>
+      <div class="atkUpRaysBox"><label>+ per slot level above</label><input id="atkUpRays" type="number" min="0" max="10" value="${+a.upRays||0}"></div>
+      <div class="atkCantripBox"><label>Cantrip upgrade (5/11/17)</label><select id="atkCantrip">
+       <option value="">None</option><option value="dice" ${a.cantripScale==="dice"?"selected":""}>More damage dice</option>
+       <option value="rays" ${a.cantripScale==="rays"?"selected":""}>One more beam each tier</option></select></div></div>
      <div class="dim" style="margin-top:3px">Spells use your spell attack bonus or save DC and get spell bonuses (e.g. Radiant Soul on radiant/fire damage) — not weapon bonuses.</div></div>
    <div class="spacer"></div>
    <div class="grid2">
-    <div><label>Misc to-hit bonus</label><input id="atkMisc" type="number" value="${a.bonusMisc||0}"></div>
+    <div><label id="atkMiscLbl">Misc to-hit bonus</label><input id="atkMisc" type="number" value="${a.bonusMisc||0}"></div>
     <div class="atkWeaponOnly"><label>Mastery (2024)</label><select id="atkMastery"><option value="">None</option>${Object.keys(MASTERIES).map(m=>`<option ${a.mastery===m?"selected":""}>${m}</option>`).join("")}</select></div></div>
    <div class="spacer"></div>
    <div class="grid2 atkWeaponOnly">
@@ -2557,33 +2688,67 @@ function editAttack(i){const c=cur();const a=i>=0?c.attacks[i]:{name:"",ability:
       ${(c.inventory.items||[]).filter(it=>it.cat==="Ammo").map(it=>`<option value="${esc(it.id||it.name)}" ${a.ammoId===(it.id||it.name)?"selected":""}>${esc(it.name)} (×${+it.qty||0})</option>`).join("")}</select></div></div>
    <div class="spacer"></div>
    <div class="row">
-     <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:0"><input type="checkbox" id="atkProf" ${a.proficient?"checked":""}> Proficient (${fmt(profBonus(c))})</label>
+     <label class="atkManualStats" style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:0"><input type="checkbox" id="atkProf" ${a.proficient?"checked":""}> Proficient (${fmt(profBonus(c))})</label>
      <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;margin:0"><input type="checkbox" id="atkAddAb" ${a.addAbility?"checked":""}> Add ability mod to damage</label></div>
    <div class="spacer"></div>
    <label>Damage — one row per type (split damage)</label>
-   <div id="dmgParts">${(a.dmgParts&&a.dmgParts.length?a.dmgParts:[{d:"",t:""}]).map(dmgPartRow).join("")}</div>
-   <button class="btn ghost small" onclick="$('#dmgParts').insertAdjacentHTML('beforeend',dmgPartRow())">＋ Add damage type</button>
+   <div id="dmgParts">${(a.dmgParts&&a.dmgParts.length?a.dmgParts:[{d:"",t:""}]).map(atkPartRow).join("")}</div>
+   <button class="btn ghost small" onclick="$('#dmgParts').insertAdjacentHTML('beforeend',atkPartRow());atkKindShow()">＋ Add damage type</button>
    <div class="spacer"></div><label>Notes</label><input id="atkNotes" value="${esc(a.notes||"")}">
    <div class="spacer"></div><div class="row">
    ${i>=0?`<button class="btn danger" onclick="cur().attacks.splice(${i},1);touch();closeModal();renderTab()">Delete</button>`:""}
    <button class="btn" onclick="saveAttack(${i})">Save</button></div>`);
   atkKindShow();}
-/* Show the fields that make sense for the chosen attack type (weapons: magic, ammo, mastery; spells: attack or save). */
-function atkKindShow(){const sp=($("#atkKind")||{}).value==="spell";
-  $$(".atkSpellOnly").forEach(e=>e.style.display=sp?"":"none");
-  $$(".atkWeaponOnly").forEach(e=>e.style.display=sp?"none":"");}
-function atkKindChanged(i){atkKindShow();const c=cur();
-  if(i<0&&$("#atkKind").value==="spell"){ /* sensible defaults for a new spell: casting ability, no ability mod on damage */
-    $("#atkAb").value=c.spellcasting.ability||"cha";$("#atkProf").checked=true;$("#atkAddAb").checked=false;}}
+/* Show the fields that make sense for the chosen attack type (weapons: magic, ammo, mastery; spells: link, how it
+   resolves, save outcome, condition, rays, upcast, cantrip upgrade). */
+function atkKindShow(){const sp=($("#atkKind")||{}).value==="spell";const show=(sel,on)=>$$(sel).forEach(e=>e.style.display=on?"":"none");
+  show(".atkSpellOnly",sp);show(".atkWeaponOnly",!sp);
+  if(!sp){show(".atkManualStats",true);const ab=$("#atkAb");if(ab)ab.disabled=false;const m=$("#atkMiscLbl");if(m)m.textContent="Misc to-hit bonus";return;}
+  const c=cur();const useCast=$("#atkUseCast").checked;
+  const ab=$("#atkAb");ab.disabled=useCast;if(useCast)ab.value=c.spellcasting.ability||ab.value;
+  show(".atkManualStats",!useCast);
+  const ref=$("#atkSpellRef").value;const s=ref?(c.spellcasting.spells||[]).find(x=>x.name===ref):null;
+  show(".atkSpLvBox",!s);
+  const lv=s?(+s.level||0):(+$("#atkSpLv").value||0);
+  const res=$("#atkSave").value;const save=ABILITIES.includes(res);
+  show(".atkSaveOnly",save);show(".atkOnSaveTxt",save&&$("#atkOnSave").value==="text");
+  $("#atkCondLbl").textContent=save?"Condition on a failed save":"Condition on a hit";
+  $("#atkMiscLbl").textContent=save?"Misc DC bonus":"Misc to-hit bonus";
+  show(".atkCantripBox",lv===0);show(".atkUpRaysBox",lv>0);show(".dpU",lv>0);}
+function atkKindChanged(i){const c=cur();
+  if(i<0&&$("#atkKind").value==="spell"){ /* sensible defaults for a new spell: casting stats, no ability mod on damage */
+    $("#atkUseCast").checked=true;$("#atkAb").value=c.spellcasting.ability||"cha";$("#atkProf").checked=true;$("#atkAddAb").checked=false;}
+  atkKindShow();}
 function saveAttack(i){const c=cur();
-  const parts=$$("#dmgParts .dmgpart").map(r=>({d:r.querySelector(".dpD").value.trim(),t:r.querySelector(".dpT").value.trim()})).filter(p=>p.d);
+  let badUp=[];
+  const parts=$$("#dmgParts .dmgpart").map(r=>{const p={d:r.querySelector(".dpD").value.trim(),t:r.querySelector(".dpT").value.trim()};
+    const u=(r.querySelector(".dpU")||{value:""}).value.trim();
+    if(u){if(DIE_RE.test(u))p.up=u.replace(/\s+/g,"");else badUp.push(u);}
+    return p;}).filter(p=>p.d);
   const a={name:$("#atkName").value.trim()||"Attack",ability:$("#atkAb").value,proficient:$("#atkProf").checked,
     kind:$("#atkKind").value,magic:+$("#atkMagic").value||0,addAbility:$("#atkAddAb").checked,
     bonusMisc:+$("#atkMisc").value||0,dmgParts:parts,notes:$("#atkNotes").value.trim(),
     ammoId:$("#atkAmmo").value||undefined,mastery:$("#atkMastery").value||undefined};
   if(a.kind==="spell"){ /* weapon-only fields don't apply to spells */
     a.magic=0;delete a.ammoId;delete a.mastery;
-    const sv=$("#atkSave").value;if(ABILITIES.includes(sv))a.save=sv;}
+    if($("#atkUseCast").checked){a.useCasting=true;a.ability=c.spellcasting.ability||a.ability;a.proficient=true;}
+    const ref=$("#atkSpellRef").value;const s=ref?(c.spellcasting.spells||[]).find(x=>x.name===ref):null;
+    if(s){const other=linkedAttackIndex(c,s.name);
+      if(other>=0&&other!==i){toast("⚠️ "+esc(s.name)+" already has an attack — edit that one instead");return;}
+      a.spellRef=s.name;}
+    a.spellLevel=s?(+s.level||0):Math.max(0,Math.min(9,+$("#atkSpLv").value||0)); /* fallback if the spell is removed later */
+    const sv=$("#atkSave").value;
+    if(ABILITIES.includes(sv)){a.save=sv;a.onSave=$("#atkOnSave").value;
+      if(a.onSave==="text"){a.onSaveText=$("#atkOnSaveTxt").value.trim();if(!a.onSaveText)a.onSave="none";}}
+    else if(sv==="auto")a.autoHit=true;
+    const cd=$("#atkCond").value;if(CONDITIONS.includes(cd))a.cond=cd;
+    const cn=$("#atkCondNote").value.trim();if(cn)a.condNote=cn;
+    const rays=Math.max(1,Math.min(20,Math.floor(+$("#atkRays").value||1)));if(rays>1)a.rays=rays;
+    if(a.spellLevel>0){const ur=Math.max(0,Math.min(10,Math.floor(+$("#atkUpRays").value||0)));if(ur)a.upRays=ur;}
+    else{const cs=$("#atkCantrip").value;if(cs==="dice"||cs==="rays")a.cantripScale=cs;
+      a.dmgParts.forEach(p=>delete p.up);} /* cantrips don't upcast */
+  }else a.dmgParts.forEach(p=>delete p.up);
+  if(badUp.length)toast("⚠️ Upcast dice must look like 1d6 — ignored “"+esc(badUp.join(", "))+"”",4500);
   if(i>=0&&c.attacks[i].itemId)a.itemId=c.attacks[i].itemId;
   i>=0?c.attacks[i]=a:c.attacks.push(a);touch();closeModal();renderTab();}
 /* ================== SKILLS TAB ================== */
@@ -2688,9 +2853,9 @@ function renderSpells(){const c=cur();const sc=c.spellcasting;const pb=profBonus
         <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
           ${lv>0&&!s.always&&!s.fromItem?`<input type="checkbox" ${s.prepared?"checked":""} onclick="event.stopPropagation()" onchange="setPrepared(${i},this.checked)" title="Prepared">`:""}
           <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}${s.always?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">always</span>':""}${s.fromItem?`<span class="tag c">🎁 ${esc(s.fromItem)}</span>`:""}${s.fromFeature?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="granted by a feature">📜 ${esc(s.fromFeature)}</span>`:""}
-            <div class="li-sub">${esc(s.time||"")}${s.range?" · "+esc(s.range):""}${s.uses?` · ${s.usesLeft??s.uses}/${s.uses} uses ${s.recharge==="dawn"?"🌅":s.recharge==="short"?"🌙":"☀️"}`:""}</div></div>
+            <div class="li-sub">${esc(s.time||"")}${s.range?" · "+esc(s.range):""}${s.uses?` · ${s.usesLeft??s.uses}/${s.uses} uses ${s.recharge==="dawn"?"🌅":s.recharge==="short"?"🌙":"☀️"}`:""}${spellAttackLine(c,s)}</div></div>
           ${s.uses?`<button class="btn small" onclick="event.stopPropagation();castItemSpell(${i})">Cast</button>`
-            :lv>0?`<button class="btn small" onclick="event.stopPropagation();castSpell(${lv},${s.conc?`'${jstr(s.name)}'`:"null"})">Cast</button>`:""}
+            :lv>0?`<button class="btn small" onclick="event.stopPropagation();${linkedAttackIndex(c,s.name)>=0?`castSpellAttack(${i})`:`castSpell(${lv},${s.conc?`'${jstr(s.name)}'`:"null"})`}">Cast</button>`:""}
           <button class="iconbtn" onclick="event.stopPropagation();spellMenu(${i})">⋮</button></div>
         <div class="li-body">
           <div class="dim">${esc(s.school||"")} · ${esc(s.components||"")}${s.duration?" · "+esc(s.duration):""}</div>
@@ -2832,10 +2997,71 @@ function applySpellPick(){const c=cur();
       c.spellcasting.spells.push({name:s.name,level:s.level,school:s.school,time:s.time,range:s.range,components:s.components,
         duration:s.duration,conc:s.conc,ritual:s.ritual,prepared:true,desc:s.desc,higher:s.higher,source:"srd"});n++;}});
   touch();if(n)toast("✨ "+n+" spell"+(n>1?"s":"")+" added");qNext();}
-function spellMenu(i){const s=cur().spellcasting.spells[i];
+function spellMenu(i){const c=cur();const s=c.spellcasting.spells[i];const ai=linkedAttackIndex(c,s.name);
   openModal(`<h2>${esc(s.name)} ${XBTN}</h2>
     <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();editCustomSpell(${i})">✏️ Edit</button>
-    <button class="btn danger" style="width:100%" onclick="cur().spellcasting.spells.splice(${i},1);touch();closeModal();renderTab()">🗑️ Remove</button>`);}
+    <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();setupSpellAttack(${i})">⚔️ ${ai>=0?"Edit attack":"Set up attack (damage, save, upcast…)"}</button>
+    <button class="btn danger" style="width:100%" onclick="removeSpell(${i})">🗑️ Remove</button>`);}
+/* Removing a spell keeps its attack on Main (you may still want it) but unlinks it; its level is kept for upcasting. */
+function removeSpell(i){const c=cur();const s=c.spellcasting.spells[i];if(!s)return;
+  let n=0;(c.attacks||[]).forEach(a=>{if(isSpellAtk(a)&&a.spellRef===s.name){a.spellLevel=+s.level||0;delete a.spellRef;n++;}});
+  c.spellcasting.spells.splice(i,1);touch();closeModal();renderTab();
+  if(n)toast("🗑️ "+esc(s.name)+" removed — its attack stays on Main (no longer linked)",4000);}
+/* One-line summary of a spell's attack, shown inside the spell card on the Spells tab. */
+/* The spell's attack in its subtitle (visible while the card is closed); tap it for the full breakdown. */
+function spellAttackLine(c,s){const ai=linkedAttackIndex(c,s.name);if(ai<0)return "";const a=c.attacks[ai];
+  const dmg=attackDmgLabel(c,a,true);
+  return `<div style="color:var(--accent2);cursor:pointer;margin-top:2px" title="Attack: tap for to hit / DC and damage" onclick="event.stopPropagation();explainAttack(${ai})">⚔️ ${esc(attackHitLabel(c,a))}${dmg?" · "+dmg:""}${isSaveSpell(a)&&a.onSave==="half"?" · half on save":""}</div>`;}
+function setupSpellAttack(i){const c=cur();const s=c.spellcasting.spells[i];if(!s)return;
+  const ai=linkedAttackIndex(c,s.name);
+  if(ai>=0){editAttack(ai);return;}
+  _atkDraft=guessSpellAttack(c,s);editAttack(-1);}
+/* Best guess at a spell's attack from its text (SRD prose has no structured damage). Always shown in the editor
+   for the player to confirm — never saved silently. Handles 2014 and 2024 wording. */
+const NUM_WORDS={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10};
+function guessSpellAttack(c,s){
+  const txt=String(s.desc||"")+"\n"+String(s.higher||"");const lv=+s.level||0;
+  const a={name:s.name,kind:"spell",ability:c.spellcasting.ability||"cha",proficient:true,useCasting:true,addAbility:false,
+    magic:0,bonusMisc:0,dmgParts:[],notes:"",spellRef:s.name,spellLevel:lv,_guessed:true};
+  const sv=/\b(strength|dexterity|constitution|intelligence|wisdom|charisma) saving throw/i.exec(txt);
+  if(sv)a.save=sv[1].slice(0,3).toLowerCase();
+  if(a.save)a.onSave=/half as much damage|half damage|damage is halved/i.test(txt)?"half":"none";
+  const seen=new Set();const re=/(\d+d\d+(?:\s*\+\s*\d+)?)\s+(acid|bludgeoning|cold|fire|force|lightning|necrotic|piercing|poison|psychic|radiant|slashing|thunder) damage/gi;let m;
+  const main=String(s.desc||"");
+  while((m=re.exec(main))!==null){const t=m[2].toLowerCase();if(seen.has(t))continue;seen.add(t);a.dmgParts.push({d:m[1].replace(/\s+/g,""),t});}
+  /* no attack roll and no save, yet it deals damage (Magic Missile) → it just hits */
+  if(!a.save&&!/spell attack/i.test(txt)&&a.dmgParts.length)a.autoHit=true;
+  if(lv>0){ /* "the damage increases by 1d6 for each slot level above 3rd" · "the cold damage increases by 1d8…" */
+    const up=/(?:(\w+) )?damage increases by (\d+d\d+) for each (?:spell )?slot level above/i.exec(txt);
+    if(up&&a.dmgParts.length){const t=(up[1]||"").toLowerCase();const k=a.dmgParts.findIndex(p=>p.t===t);a.dmgParts[k>=0?k:0].up=up[2];}
+    const more=/(?:one|an) (?:additional|more|extra) (ray|dart|beam|bolt|missile)s? for each (?:spell )?slot level above/i.exec(txt);
+    if(more){a.upRays=1;const n=new RegExp("\\b(two|three|four|five|six|\\d+) (?:glowing )?(?:"+more[1]+")s\\b","i").exec(main);
+      if(n)a.rays=NUM_WORDS[n[1].toLowerCase()]||(+n[1]||1);}}
+  else{
+    if(/\bbeams?\b/i.test(txt)&&/(more than one beam|additional beam|beams when you reach|two beams)/i.test(txt))a.cantripScale="rays";
+    else if(/(increases by \d+d\d+ when you reach 5th level|\(\d+d\d+\) at 5th level|reach levels? 5|at 5th level \(\d+d\d+\))/i.test(txt)||/cantrip upgrade/i.test(txt))a.cantripScale="dice";}
+  const cd=new RegExp("\\b(?:is|be|becomes|become|are|falls?|knocked) (?:also )?("+CONDITIONS.join("|")+")\\b","i").exec(main);
+  if(cd)a.cond=CONDITIONS.find(x=>x.toLowerCase()===cd[1].toLowerCase());
+  if(!a.dmgParts.length)a.dmgParts=[{d:"",t:""}];
+  return a;}
+/* Cast on a spell that has an attack: pick the slot level (the damage scales with it), spend it, then show the
+   attack at that level. Cancelling (or declining to drop concentration) spends nothing. */
+function castSpellAttack(si){const c=cur();const s=c.spellcasting.spells[si];if(!s)return;const sc=c.spellcasting;const lv=+s.level||0;
+  const ai=linkedAttackIndex(c,s.name);if(ai<0||lv<1){castSpell(lv,s.conc?s.name:null);return;}
+  const opts=[];
+  for(let l=lv;l<=9;l++){const sl=sc.slots[l];if(sl&&sl.max-sl.used>0)opts.push(`<button class="btn ghost" style="width:100%;margin-bottom:6px" onclick="castAttackAt(${si},${l},false)">Level ${l} slot <span class="dim">· ${sl.max-sl.used} left · ${attackDmgLabel(c,c.attacks[ai],true,l)||"no damage set"}</span></button>`);}
+  if(sc.pact.max-sc.pact.used>0&&sc.pact.level>=lv)opts.push(`<button class="btn ghost" style="width:100%;margin-bottom:6px;border-color:var(--gold)" onclick="castAttackAt(${si},${sc.pact.level},true)">Pact slot (level ${sc.pact.level}) <span class="dim">· ${sc.pact.max-sc.pact.used} left · ${attackDmgLabel(c,c.attacks[ai],true,sc.pact.level)||"no damage set"}</span></button>`);
+  if(!opts.length){toast("⚠️ No slots of level "+lv+"+ left");return;}
+  openModal(`<h2>✨ Cast ${esc(s.name)} ${XBTN}</h2><p class="dim">Choose the slot to spend — higher slots scale the damage.</p>${opts.join("")}`);}
+function castAttackAt(si,l,pact){const c=cur();const s=c.spellcasting.spells[si];if(!s)return;const sc=c.spellcasting;
+  if(s.conc&&concentrationBlocked(s.name))return;
+  if(pact){if(sc.pact.max-sc.pact.used<=0||sc.pact.level<(+s.level||0)){toast("⚠️ No pact slot left");return;}sc.pact.used++;}
+  else{const sl=sc.slots[l];if(!sl||sl.max-sl.used<=0||l<(+s.level||0)){toast("⚠️ No level "+l+" slot left");return;}sl.used++;}
+  if(s.conc)setConcentration(s.name);
+  touch();renderTab();
+  const ai=linkedAttackIndex(c,s.name);
+  if(ai>=0)explainAttack(ai,l,true);else closeModal();
+  toast(`✨ ${esc(s.name)} cast with a level ${l} ${pact?"pact ":""}slot${s.conc?" · 🧠 concentrating":""}`);}
 function editSlots(){const c=cur();const sc=c.spellcasting;
   openModal(`<h2>Spell slots ${XBTN}</h2>
    <div class="card" style="background:var(--card2)"><h3>Auto-fill</h3><div class="spacer"></div>
@@ -2904,11 +3130,16 @@ function saveCustomSpell(i){const sc=cur().spellcasting;
    uses:uses||undefined,recharge:uses?$("#cs_rech").value:undefined,
    prepared:i>=0?old.prepared:true,desc:$("#cs_desc").value,higher:$("#cs_higher").value.trim(),source:old.source||"custom"};
   if(uses)s.usesLeft=Math.min(old.usesLeft??uses,uses);
+  if(i>=0&&old.name!==s.name&&sc.spells.some((x,j)=>j!==i&&x.name===s.name)){toast("⚠️ You already have a spell called "+esc(s.name));return;}
+  if(i>=0&&old.name&&old.name!==s.name) /* renaming keeps its attack linked */
+    (cur().attacks||[]).forEach(a=>{if(isSpellAtk(a)&&a.spellRef===old.name)a.spellRef=s.name;});
+  (cur().attacks||[]).forEach(a=>{if(isSpellAtk(a)&&a.spellRef===s.name)a.spellLevel=s.level;}); /* keep the fallback level in step */
   i>=0?sc.spells[i]=s:sc.spells.push(s);touch();closeModal();renderTab();}
 function castItemSpell(i){const s=cur().spellcasting.spells[i];const mx=+s.uses||0;
   if(s.conc&&concentrationBlocked(s.name))return; /* declined: no use is spent */
   if((s.usesLeft??mx)<=0){toast("No uses left — recovers "+(s.recharge==="dawn"?"🌅 at dawn":s.recharge==="short"?"🌙 on a short rest":"☀️ on a long rest"));return;}
   s.usesLeft=(s.usesLeft??mx)-1;if(s.conc)setConcentration(s.name);touch();renderTab();
+  {const ai=linkedAttackIndex(cur(),s.name);if(ai>=0)explainAttack(ai,+s.level||0,true);}
   toast("✨ "+esc(s.name)+(s.fromItem?" ("+esc(s.fromItem)+")":"")+" — "+s.usesLeft+"/"+mx+" uses left");}
 
 /* ================== INVENTORY TAB ================== */
@@ -4785,6 +5016,87 @@ function runSelfTests(){
       features:[{name:"F",effects:[{t:"dmg.spell",v:2,dt:"Fire, banana"},{t:"dmg.spell",v:2,dt:["banana"]}]}]});
     eq(c.attacks[0].kind,"melee");eq(c.attacks[0].save,undefined);eq(c.attacks[1].save,undefined);eq(c.attacks[2].save,"wis");
     eq(c.features[0].effects[0].dt.join(),"fire");eq(c.features[0].effects[1].dt.length,0,"unknown types: matches nothing");});
+  /* ---- spell attacks linked to spells: upcast, cantrip upgrade, rays, save outcome, casting stats ---- */
+  const wiz=(lv,more)=>mk(x=>{x.classes=[{name:"Wizard",subclass:"",level:lv}];x.abilities.int=18;x.spellcasting.ability="int";
+    for(let l=1;l<=9;l++)x.spellcasting.slots[l]={max:l<=5?2:0,used:0};if(more)more(x);});
+  const fb={name:"Fireball",level:3,conc:false,desc:"Each creature in a 20-foot-radius sphere centered on that point must make a Dexterity saving throw. A target takes 8d6 fire damage on a failed save, or half as much damage on a successful one.",
+    higher:"When you cast this spell using a spell slot of 4th level or higher, the damage increases by 1d6 for each slot level above 3rd."};
+  const fbAtk=more=>Object.assign({name:"Fireball",kind:"spell",ability:"str",proficient:false,useCasting:true,addAbility:false,magic:0,bonusMisc:0,
+    spellRef:"Fireball",spellLevel:3,save:"dex",onSave:"half",dmgParts:[{d:"8d6",t:"fire",up:"1d6"}]},more||{});
+  t("upcasting adds the per-level dice; the linked spell's level is the base",()=>{const c=wiz(9,x=>{x.spellcasting.spells.push({...fb});x.attacks.push(fbAtk());});
+    const a=c.attacks[0];eq(spellPlan(c,a).parts[0].d,"8d6");eq(spellPlan(c,a,5).parts[0].d,"10d6");eq(spellPlan(c,a,9).parts[0].d,"14d6");
+    eq(spellPlan(c,a,1).parts[0].d,"8d6","below the spell's level is clamped up");
+    ok(/^10d6 fire/.test(attackDmgLabel(c,a,true,5)),"label at level 5");
+    c.spellcasting.spells[0].level=4;eq(spellPlan(c,a,5).parts[0].d,"9d6","editing the spell's level moves the base");
+    ok(attackBreakdown(c,a,6).dmg.some(r=>/^Upcast: level 6 slot \(\+2\)/.test(r[0])&&r[1]==="+2d6 fire"),"named upcast line");
+    eq(addDice("1d8+5","1d6",2),"1d8+5+2d6","different dice are added on");});
+  t("casting stats: the DC and to-hit equal the Spells tab, misc adds to the DC",()=>{const c=wiz(5,x=>{x.spellcasting.spells.push({...fb});x.attacks.push(fbAtk());
+      x.attacks.push(fbAtk({name:"Ray",save:undefined,onSave:undefined,spellRef:undefined}));});
+    eq(attackSaveDC(c,c.attacks[0]),spellDC(c));eq(attackBonus(c,c.attacks[1]),spellAtkMod(c),"Str + not proficient are ignored");
+    c.attacks[0].bonusMisc=1;eq(attackSaveDC(c,c.attacks[0]),spellDC(c)+1);
+    c.spellcasting.ability="wis";eq(attackSaveDC(c,c.attacks[0]),spellDC(c)+1,"follows a changed casting ability");
+    delete c.attacks[1].useCasting;eq(attackBonus(c,c.attacks[1]),0,"without it: the attack's own Str 10, not proficient");});
+  t("cantrip upgrade: more dice or more beams at levels 5/11/17",()=>{const c=wiz(11,x=>{
+      x.attacks.push({name:"Fire Bolt",kind:"spell",useCasting:true,spellLevel:0,cantripScale:"dice",dmgParts:[{d:"1d10",t:"fire"}]});
+      x.attacks.push({name:"Eldritch Blast",kind:"spell",useCasting:true,spellLevel:0,cantripScale:"rays",dmgParts:[{d:"1d10",t:"force"}]});});
+    eq(spellPlan(c,c.attacks[0]).parts[0].d,"3d10");eq(spellPlan(c,c.attacks[1]).rays,3);eq(spellPlan(c,c.attacks[1]).parts[0].d,"1d10");
+    ok(/1d10 force ×3/.test(attackDmgLabel(c,c.attacks[1],true)));
+    c.classes[0].level=4;eq(spellPlan(c,c.attacks[0]).parts[0].d,"1d10","level 4: no upgrade yet");
+    c.classes[0].level=17;eq(spellPlan(c,c.attacks[0]).parts[0].d,"4d10");
+    ok(attackBreakdown(c,c.attacks[1]).dmg.some(r=>/^Number of hits/.test(r[0])&&r[1]==="×4"),"named rays line");});
+  t("rays upcast and auto-hit (Magic Missile, Scorching Ray)",()=>{const c=wiz(9,x=>{x.spellcasting.ability="int";
+      x.attacks.push({name:"Magic Missile",kind:"spell",useCasting:true,spellLevel:1,autoHit:true,rays:3,upRays:1,dmgParts:[{d:"1d4+1",t:"force"}]});
+      x.attacks.push({name:"Scorching Ray",kind:"spell",useCasting:true,spellLevel:2,rays:3,upRays:1,dmgParts:[{d:"2d6",t:"fire"}]});
+      x.activeBuffs=["Bless"];});
+    eq(spellPlan(c,c.attacks[0],3).rays,5);eq(spellPlan(c,c.attacks[1],4).rays,5);eq(spellPlan(c,c.attacks[1]).rays,3);
+    eq(attackHitLabel(c,c.attacks[0]),"Auto");eq(attackBreakdown(c,c.attacks[0]).hit.length,0,"no to-hit, Bless doesn't show");
+    ok(attackBreakdown(c,c.attacks[1]).hit.some(r=>/Bless/.test(r[0])),"Bless on an attack-roll spell");
+    let shown="";const keep=openModal;openModal=h=>{shown=h;};
+    try{rollAttackHit(0);}finally{openModal=keep;}
+    ok(/hits automatically/i.test(shown),"auto-hit opens the breakdown instead of rolling");});
+  t("save outcome and condition read as plain text",()=>{const a=fbAtk({cond:"Prone",condNote:"until it stands"});
+    eq(spellOutcome(a),"half damage on a successful save · on a failed save: Prone — until it stands");
+    eq(spellOutcome({kind:"spell",cond:"Blinded",dmgParts:[]}),"on a hit: Blinded");eq(spellOutcome({kind:"melee",cond:"Prone"}),"");});
+  t("spell-attack fields are sanitised on load",()=>{
+    const c=migrate({...newCharacter(),attacks:[
+      {name:"A",kind:"spell",save:"dex",autoHit:true,onSave:"maybe",cond:"Sleepy",rays:"50",upRays:-1,cantripScale:"x",spellLevel:12,dmgParts:[{d:"1d6",t:"fire",up:"lots"}]},
+      {name:"B",kind:"melee",rays:3,useCasting:true,spellRef:"Fireball",dmgParts:[{d:"1d8",t:"",up:"1d6"}]},
+      {name:"C",kind:"spell",autoHit:1,rays:"3",upRays:"1",cantripScale:"rays",spellLevel:"2",dmgParts:[{d:"1d6",t:"",up:"1d6"}]}]});
+    const [A,B,C]=c.attacks;
+    eq(A.autoHit,undefined,"a save wins over auto-hit");eq(A.onSave,undefined);eq(A.cond,undefined);eq(A.rays,undefined);eq(A.upRays,undefined);
+    eq(A.cantripScale,undefined);eq(A.spellLevel,undefined);eq(A.dmgParts[0].up,undefined);
+    eq(B.rays,undefined);eq(B.useCasting,undefined);eq(B.spellRef,undefined);eq(B.dmgParts[0].up,undefined,"weapons don't upcast");
+    eq(C.autoHit,true);eq(C.rays,3);eq(C.upRays,1);eq(C.spellLevel,2);eq(C.dmgParts[0].up,"1d6");});
+  t("guessing an attack from spell text (2014 and 2024 wording)",()=>{const c=wiz(5);
+    const g=guessSpellAttack(c,fb);eq(g.save,"dex");eq(g.onSave,"half");eq(JSON.stringify(g.dmgParts),'[{"d":"8d6","t":"fire","up":"1d6"}]');
+    eq(g.useCasting,true);eq(g.spellRef,"Fireball");eq(g.spellLevel,3);
+    const mm=guessSpellAttack(c,{name:"Magic Missile",level:1,desc:"You create three glowing darts of magical force. Each dart hits a creature of your choice that you can see within range. A dart deals 1d4 + 1 force damage to its target.",
+      higher:"When you cast this spell using a spell slot of 2nd level or higher, the spell creates one more dart for each slot level above 1st."});
+    eq(mm.autoHit,true);eq(mm.rays,3);eq(mm.upRays,1);eq(mm.dmgParts[0].d,"1d4+1");
+    eq(guessSpellAttack(c,{name:"Fire Bolt",level:0,desc:"Make a ranged spell attack against the target. On a hit, the target takes 1d10 fire damage. This spell's damage increases by 1d10 when you reach 5th level (2d10), 11th level (3d10), and 17th level (4d10)."}).cantripScale,"dice");
+    eq(guessSpellAttack(c,{name:"Eldritch Blast",level:0,desc:"Make a ranged spell attack against the target. On a hit, the target takes 1d10 force damage. The spell creates more than one beam when you reach higher levels: two beams at 5th level."}).cantripScale,"rays");
+    const hp=guessSpellAttack(c,{name:"Hold Person",level:2,desc:"The target must succeed on a Wisdom saving throw or be paralyzed for the duration."});
+    eq(hp.save,"wis");eq(hp.cond,"Paralyzed");eq(hp.onSave,"none");eq(hp.autoHit,undefined);
+    const fb24=guessSpellAttack(c,{name:"Fireball",level:3,desc:"Each creature in a 20-foot-radius Sphere centered on that point makes a Dexterity saving throw, taking 8d6 Fire damage on a failed save or half as much damage on a successful one.\n\nUsing a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 3."});
+    eq(fb24.save,"dex");eq(fb24.dmgParts[0].up,"1d6");eq(fb24.dmgParts[0].t,"fire");});
+  t("Cast spends exactly the chosen slot and shows the attack at that level",()=>{const c=wiz(9,x=>{x.spellcasting.spells.push({...fb});x.attacks.push(fbAtk());});
+    let shown="";const keep=openModal;openModal=h=>{shown=h;};
+    try{castSpellAttack(0);ok(/Level 3 slot/.test(shown)&&/Level 5 slot/.test(shown)&&!/Level 2 slot/.test(shown),"offers level 3+ only");
+      ok(/10d6 fire/.test(shown),"each option shows its damage");
+      castAttackAt(0,5,false);}finally{openModal=keep;}
+    eq(c.spellcasting.slots[5].used,1);eq(c.spellcasting.slots[3].used,0,"not the lowest slot");
+    ok(/cast with a level 5 slot/.test(shown)&&/10d6/.test(shown),"opens at level 5");
+    c.spellcasting.slots[4].used=2;openModal=h=>{};try{castAttackAt(0,4,false);}finally{openModal=keep;}
+    eq(c.spellcasting.slots[4].used,2,"no slot left: nothing spent");});
+  t("declining to drop concentration spends no slot",()=>{const c=wiz(9,x=>{x.spellcasting.spells.push({...fb,conc:true});x.attacks.push(fbAtk());x.concentration="Bless";});
+    const kc=confirm;confirm=()=>false;const keep=openModal;openModal=h=>{};
+    try{castAttackAt(0,3,false);}finally{confirm=kc;openModal=keep;}
+    eq(c.spellcasting.slots[3].used,0);eq(c.concentration,"Bless");});
+  t("removing a spell keeps its attack, unlinked, with its level",()=>{const c=wiz(9,x=>{x.spellcasting.spells.push({...fb});x.attacks.push(fbAtk());});
+    removeSpell(0);eq(c.spellcasting.spells.length,0);eq(c.attacks.length,1);eq(c.attacks[0].spellRef,undefined);
+    eq(spellPlan(c,c.attacks[0],5).parts[0].d,"10d6","still upcasts from level 3");});
+  t("weapons are untouched by the spell pipeline",()=>{const c=wiz(9,x=>{x.attacks.push({name:"Axe",kind:"melee",ability:"str",proficient:true,addAbility:true,magic:1,bonusMisc:0,dmgParts:[{d:"1d8",t:"slashing"}]});});
+    const p=spellPlan(c,c.attacks[0],9);eq(p.parts[0].d,"1d8");eq(p.rays,1);eq(attackBonus(c,c.attacks[0]),profBonus(c)+1);});
   t("editing effects keeps fields the editor doesn't show (ability, damage types)",()=>{
     const box=document.createElement("div");box.id="fxList";box.style.display="none";document.body.appendChild(box);
     try{box.innerHTML=fxRow({t:"dmg.melee",v:"barbarian>=9?3:2",ab:"str",ed:"2014"})+fxRow({t:"dmg.spell",v:"cha",dt:["radiant","fire"]});
