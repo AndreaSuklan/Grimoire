@@ -1492,7 +1492,10 @@ function attackBreakdown(c,a,lvl){const ctx=atkCtx(a,c);const spell=isSpellAtk(a
   const hitDice=isSaveSpell(a)||isAutoSpell(a)?[]:buffD20Extras(c,"attack");
   hitDice.forEach(b=>hit.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
   const dmg=[];
-  (a.dmgParts||[]).forEach((p,j)=>dmg.push([j===0?(spell?"Spell dice":"Weapon dice"):"Extra dice",p.d+(p.t?" "+p.t:"")])); /* base dice: scaling gets its own lines below */
+  (a.dmgParts||[]).forEach((p,j)=>{const r=parseDmg(c,p.d); /* base dice: scaling gets its own lines below */
+    if(r.dice)dmg.push([j===0?(spell?"Spell dice":"Weapon dice"):"Extra dice",r.dice+(p.t?" "+p.t:"")]);
+    r.terms.forEach(t=>dmg.push([esc(t.label)+(r.dice?"":p.t?" ("+esc(p.t)+")":""),t.v]));
+    if(r.bad.length)dmg.push(["⚠️ Not understood, ignored: "+esc(r.bad.join(", "))+" — edit the attack","—"]);});
   if(spell&&plan.tier>1&&a.cantripScale==="dice")dmg.push(["Cantrip upgrade (character level "+totalLevel(c)+")","×"+plan.tier+" dice"]);
   if(spell&&plan.above>0&&(a.dmgParts||[]).some(p=>p.up))
     dmg.push(["Upcast: level "+plan.lvl+" slot (+"+plan.above+")",a.dmgParts.filter(p=>p.up).map(p=>"+"+scaleDice(p.up,plan.above)+(p.t?" "+p.t:"")).join(", ")]);
@@ -2319,6 +2322,36 @@ function compSave(i){const c=cur();
   touch();closeModal();setTab("comp");}
 function ammoItem(c,a){if(!a.ammoId)return null;
   return (c.inventory.items||[]).find(it=>(it.id||it.name)===a.ammoId)||null;}
+/* ---- damage text: dice + values ----
+   A damage row can mix dice, numbers and values worked out from the sheet every time: "1d8+cha", "2d6+prof",
+   "max(1,wis)", "3". Dice and plain numbers stay on the dice line ("1d4+1"); each value gets its own named line
+   in the breakdown. Anything not understood is never silently dropped: the editor refuses it, and old data shows
+   a ⚠️ line instead of quietly rolling less. */
+const DMG_WORDS=()=>["prof","pb","level","lv","min","max",...ABILITIES,...CLASSES.filter(k=>k!=="Other").map(k=>k.toLowerCase())];
+function splitTerms(expr){const out=[];let cur="",depth=0;
+  for(const ch of String(expr||"").replace(/\s+/g,"")){
+    if(ch==="(")depth++;if(ch===")")depth--;
+    if((ch==="+"||ch==="-")&&depth===0&&cur!==""&&!/[*\/(,]$/.test(cur)){out.push(cur);cur=ch;}else cur+=ch;}
+  if(cur!=="")out.push(cur);return out;}
+function termLabel(t){const w=t.replace(/^[+-]/,"").toLowerCase();
+  if(ABILITIES.includes(w))return ABL_NAMES[w]+" modifier";
+  if(w==="prof"||w==="pb")return "Proficiency";
+  if(w==="level"||w==="lv")return "Character level";
+  const k=CLASSES.find(x=>x.toLowerCase()===w);if(k)return k+" level";
+  return w;}
+/* c may be null (editor check without a character): values are then not evaluated */
+function parseDmg(c,expr){const r={dice:"",diceOnly:"",num:0,terms:[],bad:[]};const dice=[];
+  splitTerms(expr).forEach(t=>{const sign=t.startsWith("-")?-1:1;const body=t.replace(/^[+-]/,"");
+    if(!body)return;
+    if(/^\d*d\d+$/i.test(body)){dice.push((sign<0?"-":"+")+body.toLowerCase());return;}
+    if(/^\d+$/.test(body)){r.num+=sign*(+body);return;}
+    const words=(body.toLowerCase().match(/[a-z]+/g)||[]);
+    if(!/^[0-9a-z+\-*\/(),.]+$/i.test(body)||!words.length||words.some(w=>!DMG_WORDS().includes(w))||/\d*d\d+/i.test(body.replace(/[a-z]{2,}/gi,""))){r.bad.push(body);return;}
+    r.terms.push({label:termLabel(t),src:body,v:c?sign*evalFormula(c,body):0});});
+  r.diceOnly=dice.join("").replace(/^\+/,"");
+  r.dice=(r.diceOnly+(r.num?fmt(r.num):"")).replace(/^\+/,"")||(r.num?String(r.num):"");
+  return r;}
+const partFlat=(c,p)=>{const r=parseDmg(c,p.d);return r.num+r.terms.reduce((s,t)=>s+t.v,0);};
 function rollAttackHit(i){const c=cur();const a=c.attacks[i];
   if(isSaveSpell(a)||isAutoSpell(a)){explainAttack(i);return;} /* nothing to roll: the targets save, or it just hits */
   const am=ammoItem(c,a);
@@ -2417,7 +2450,8 @@ function attackBuffIcons(c,a,which){
   return ics;}
 function attackDmgLabel(c,a,noIcons,lvl){const plan=spellPlan(c,a,lvl);const parts=plan.parts;if(!parts.length)return "";
   const fl=attackDmgFlats(c,a);
-  let txt=parts.map((p,j)=>esc(p.d)+(fl[j]?fmt(fl[j]):"")+(p.t?" "+esc(p.t):""))
+  let txt=parts.map((p,j)=>{const r=parseDmg(c,p.d);const f=partFlat(c,p)+(fl[j]||0);
+      return (r.diceOnly?esc(r.diceOnly)+(f?fmt(f):""):String(f))+(r.bad.length?" ⚠️":"")+(p.t?" "+esc(p.t):"");})
     .concat(attackDiceExtras(c,a).map(b=>esc(b.dice).replace(/^\+/,"").replace(/^-/,"− ")+(b.t?" "+esc(b.t):"")))
     .join(" + ").replace(/\+ − /g,"− ");
   if(plan.rays>1)txt=(parts.length>1?"("+txt+")":txt)+" ×"+plan.rays;
@@ -2436,8 +2470,8 @@ function rollAttackDamage(i,lvl){const c=cur();const a=c.attacks[i];
   let total=0;const lines=[];const fl=attackDmgFlats(c,a);
   for(let k=0;k<plan.rays;k++){let sub=0;
     if(plan.rays>1)lines.push(`<div class="dim" style="margin-top:4px">#${k+1}</div>`);
-    parts.forEach((p,j)=>{const r=rollExpr(p.d)||{total:0,detail:"?"};
-      const extra=fl[j]||0;
+    parts.forEach((p,j)=>{const pr=parseDmg(c,p.d);const r=(pr.diceOnly&&rollExpr(pr.diceOnly))||{total:0,detail:""};
+      const extra=(fl[j]||0)+partFlat(c,p);
       const t=r.total+extra;sub+=t;
       lines.push(`<div><b>${t}</b> ${esc(p.t||"damage")} <span class="dim">${esc(r.detail)}${extra?" "+fmt(extra):""}</span></div>`);});
     attackDiceExtras(c,a).forEach(b=>{const r=rollExpr(b.dice);
@@ -2750,12 +2784,16 @@ function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and 
   const cr=celestialResilience(c); /* after temp HP reset: the rest ends, then the patron's gift arrives */
   touch();renderTab();toast("☀️ Long rest complete!"+(gone?" ("+gone+" summon"+(gone>1?"s":"")+" dismissed)":"")+(cr?" ☀️ "+cr+" temp HP (Celestial Resilience).":""));}
 function dmgPartRow(p){return `<div class="row dmgpart" style="margin-bottom:6px">
-  <input class="dpD" placeholder="1d8 or 2d6+1" value="${esc(p&&p.d||"")}">
+  <input class="dpD" placeholder="1d8+cha, 2d6+1, prof…" value="${esc(p&&p.d||"")}">
   <input class="dpT" placeholder="type (slashing, fire…)" value="${esc(p&&p.t||"")}">
   <button class="iconbtn" style="flex:none" onclick="this.parentElement.remove()">✕</button></div>`;}
+/* Editor check for damage rows: returns a message naming what isn't understood, or "" when every row is fine. */
+function dmgRowsBad(parts){const bad=[];
+  (parts||[]).forEach(p=>{const r=parseDmg(null,p.d);if(r.bad.length)bad.push("“"+r.bad.join("”, “")+"” in "+p.d);});
+  return bad.length?"⚠️ Damage not understood: "+esc(bad.join("; "))+". Use dice (1d8), numbers, or prof, level, str…cha, a class level, min()/max() — e.g. 1d8+cha.":"";}
 /* attack editor damage row: weapons use dmgPartRow's two fields; spells add "+dice per slot level above" */
 function atkPartRow(p){return `<div class="dmgpart" style="margin-bottom:6px"><div class="row">
-  <input class="dpD" placeholder="1d8 or 2d6+1" value="${esc(p&&p.d||"")}">
+  <input class="dpD" placeholder="1d8+cha, 2d6+1, prof…" value="${esc(p&&p.d||"")}">
   <input class="dpT" placeholder="type (slashing, fire…)" value="${esc(p&&p.t||"")}">
   <button class="iconbtn" style="flex:none" onclick="this.closest('.dmgpart').remove()">✕</button></div>
   <input class="dpU atkSpellOnly" style="margin-top:4px" placeholder="upcast: + dice per slot level above the spell's level, e.g. 1d6" value="${esc(p&&p.up||"")}"></div>`;}
@@ -2871,7 +2909,11 @@ function saveAttack(i){const c=cur();
     else{const cs=$("#atkCantrip").value;if(cs==="dice"||cs==="rays")a.cantripScale=cs;
       a.dmgParts.forEach(p=>delete p.up);} /* cantrips don't upcast */
   }else a.dmgParts.forEach(p=>delete p.up);
+  {const bad=dmgRowsBad(parts);if(bad){toast(bad,6000);return;}}
   if(badUp.length)toast("⚠️ Upcast dice must look like 1d6 — ignored “"+esc(badUp.join(", "))+"”",4500);
+  {const ab=attackAbility(c,a);
+   if(a.addAbility&&ab&&parts.some(p=>parseDmg(null,p.d).terms.some(t=>t.src.toLowerCase()===ab)))
+     toast("⚠️ "+ABL_NAMES[ab]+" is both in a damage row and ticked “Add ability mod to damage” — it counts twice. Untick one if that's not intended.",6000);}
   if(i>=0&&c.attacks[i].itemId)a.itemId=c.attacks[i].itemId;
   i>=0?c.attacks[i]=a:c.attacks.push(a);touch();closeModal();renderTab();}
 /* ================== SKILLS TAB ================== */
@@ -3406,6 +3448,7 @@ function saveItem(i){const inv=cur().inventory;
     it.armor={base:+$("#it_acBase").value||10,dexCap:dx==="full"?null:+dx,strReq:+$("#it_acStr").value||0};}
   if(cat==="Weapon"){
     const parts=$$("#it_wParts .dmgpart").map(r=>({d:r.querySelector(".dpD").value.trim(),t:r.querySelector(".dpT").value.trim()})).filter(p=>p.d);
+    {const bad=dmgRowsBad(parts);if(bad){toast(bad,6000);return;}}
     it.weapon={parts:parts.length?parts:[{d:"1d6",t:""}],dmg:(parts[0]||{}).d||"1d6",type:(parts[0]||{}).t||"",
       kind:$("#it_wKind").value,finesse:$("#it_wFin").checked,mastery:$("#it_wMastery").value||undefined};}
   i>=0?inv.items[i]=it:inv.items.push(it);
@@ -5329,6 +5372,34 @@ function runSelfTests(){
     try{box.innerHTML=fxRow({t:"dmg.any",v:"1d6",dType:"necrotic"},"buff")+fxRow({t:"ac",v:"1d4"},"buff")+fxRow({t:"dmg.all",v:"1d6+2"},"buff")+fxRow({t:"dmg.all",v:"-1d4"},"buff");
       const out=fxCollect();eq(JSON.stringify(out),'[{"t":"dmg.any","v":"1d6","dType":"necrotic"},{"t":"dmg.all","v":"-1d4"}]');
     }finally{box.remove();toast=kt;}});
+  /* ---- damage rows with values (1d8+cha, 2d6+prof, max(1,wis), 3) ---- */
+  const dv=more=>mk(x=>{x.classes=[{name:"Warlock",subclass:"",level:5}];x.abilities.cha=16;x.abilities.wis=8;x.spellcasting.ability="cha";if(more)more(x);});
+  t("damage text: dice, numbers and values are read apart",()=>{const c=dv();
+    const r=parseDmg(c,"1d8 + cha + 2 - 1d4");eq(r.diceOnly,"1d8-1d4");eq(r.num,2);eq(r.dice,"1d8-1d4+2");eq(r.terms.length,1);eq(r.terms[0].label,"Charisma modifier");eq(r.terms[0].v,3);
+    eq(parseDmg(c,"max(1,wis)").terms[0].v,1,"max() with a negative Wis");eq(parseDmg(c,"-prof").terms[0].v,-3);
+    eq(parseDmg(c,"warlock").terms[0].label,"Warlock level");eq(parseDmg(c,"warlock").terms[0].v,5);
+    eq(parseDmg(c,"3").dice,"3");eq(parseDmg(c,"1d4+1").dice,"1d4+1");
+    eq(JSON.stringify(parseDmg(c,"1d8+chr").bad),'["chr"]');eq(JSON.stringify(parseDmg(c,"1d8 slashing").bad),'["1d8slashing"]');
+    eq(parseDmg(c,"max(1d4,2)").bad.length,1,"dice inside a formula");});
+  t("values in a damage row reach the label, the breakdown and the roll",()=>{const c=dv(x=>{
+      x.attacks.push({name:"Blade",kind:"melee",ability:"cha",proficient:true,addAbility:false,magic:0,bonusMisc:0,dmgParts:[{d:"1d8+cha",t:"slashing"},{d:"prof",t:"radiant"}]});});
+    const a=c.attacks[0];ok(/^1d8\+3 slashing \+ 3 radiant/.test(attackDmgLabel(c,a,true)),attackDmgLabel(c,a,true));
+    const b=attackBreakdown(c,a).dmg;ok(b.some(r=>r[0]==="Weapon dice"&&r[1]==="1d8 slashing"));ok(b.some(r=>r[0]==="Charisma modifier"&&r[1]===3));
+    ok(b.some(r=>r[0]==="Proficiency (radiant)"&&r[1]===3));
+    let tot=null;const kl=logRoll,kt=toast;logRoll=(n,v)=>{tot=v;};toast=()=>{};
+    try{for(let k=0;k<20;k++){rollAttackDamage(0);rng(tot,1+3+3,8+3+3);}}finally{logRoll=kl;toast=kt;}
+    c.abilities.cha=20;ok(/^1d8\+5/.test(attackDmgLabel(c,a,true)),"follows the current score");});
+  t("values ride on every hit and survive cantrip scaling",()=>{const c=dv(x=>{
+      x.attacks.push({name:"Eldritch Blast",kind:"spell",useCasting:true,spellLevel:0,cantripScale:"rays",dmgParts:[{d:"1d10+cha",t:"force"}]});
+      x.attacks.push({name:"Toll",kind:"spell",useCasting:true,spellLevel:0,cantripScale:"dice",dmgParts:[{d:"1d8+cha",t:"necrotic"}]});});
+    eq(spellPlan(c,c.attacks[1]).parts[0].d,"2d8+cha");ok(/^2d8\+3 necrotic/.test(attackDmgLabel(c,c.attacks[1],true)));
+    let tot=null;const kl=logRoll,kt=toast;logRoll=(n,v)=>{tot=v;};toast=()=>{};
+    try{for(let k=0;k<20;k++){rollAttackDamage(0);rng(tot,2*(1+3),2*(10+3),"2 beams × (1d10+3)");}}finally{logRoll=kl;toast=kt;}});
+  t("old rows that aren't understood show a warning line instead of rolling less silently",()=>{const c=dv(x=>{
+      x.attacks.push({name:"Old",kind:"melee",ability:"str",proficient:true,addAbility:false,magic:0,bonusMisc:0,dmgParts:[{d:"1d8+chr",t:""}]});});
+    ok(attackBreakdown(c,c.attacks[0]).dmg.some(r=>/Not understood, ignored: chr/.test(r[0])));ok(/⚠️/.test(attackDmgLabel(c,c.attacks[0],true)));});
+  t("the editor check names what it doesn't understand",()=>{eq(dmgRowsBad([{d:"1d8+cha"},{d:"2d6+prof"},{d:"max(1,wis)"},{d:"3"}]),"");
+    ok(/chr/.test(dmgRowsBad([{d:"1d8+chr"}])));ok(/potato/.test(dmgRowsBad([{d:"potato"}])));});
   t("editing effects keeps fields the editor doesn't show (ability, damage types)",()=>{
     const box=document.createElement("div");box.id="fxList";box.style.display="none";document.body.appendChild(box);
     try{box.innerHTML=fxRow({t:"dmg.melee",v:"barbarian>=9?3:2",ab:"str",ed:"2014"})+fxRow({t:"dmg.spell",v:"cha",dt:["radiant","fire"]});

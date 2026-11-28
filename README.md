@@ -54,6 +54,11 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.12 — Values in damage rows
+- An attack's damage row (weapons and spells, and weapon items) can mix dice, numbers and values from your sheet: `1d8+cha`, `2d6+prof`, `max(1,wis)`, `warlock`, or just `3`. Values use your current stats, are added to every hit (each beam or dart), and each one is its own named line in the breakdown ("Charisma modifier +3").
+- **Fix:** `1d8+cha` used to roll only `1d8`, with the `cha` silently dropped. The editor now refuses anything it doesn't understand and says which part. An old row that has such text shows a ⚠️ line in the breakdown.
+- Ticking "Add ability mod to damage" while the same ability is already in a damage row shows a warning, because it would count twice.
+
 ### New in v1.11 — Dice bonuses and spell buffs
 - A damage bonus can now be **dice** (`1d6`, `-1d4`) with an optional damage type ("dice deal: necrotic"). The dice are rolled with each hit (once per ray or beam), shown in the attack's damage, and named in the breakdown. Mixing dice and a number in one bonus (`1d6+2`) is refused, and so are dice on non-damage targets.
 - New target **Any attack damage (weapons and spells)**. "All weapon damage" still doesn't reach spells.
