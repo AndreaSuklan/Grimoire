@@ -343,48 +343,12 @@ const EFFECT_LABELS=Object.fromEntries(EFFECT_GROUPS.flatMap(g=>g[1]));
 const isDefTarget=t=>/^(resist|immune|vuln|condimm)\./.test(t||"");
 const fxLabel=e=>{
   if(/^custom\./.test(e.t||""))return ({resist:"Resistant to",immune:"Immune to",vuln:"Vulnerable to"}[e.t.split(".")[1]]||"")+" “"+esc(String(e.v))+"”";
-  return esc(EFFECT_LABELS[e.t]||e.t)+(isDefTarget(e.t)?"":" "+esc(String(e.v)))+dtLabel(e.dt)+(e.on?" ("+esc(scopeLabel(typeof cur==="function"?cur():null,e.on))+" only)":"");};
+  return esc(EFFECT_LABELS[e.t]||e.t)+(isDefTarget(e.t)?"":" "+esc(String(e.v)))+dtLabel(e.dt);};
 /* Damage-type filter on an effect (e.g. Radiant Soul: only radiant or fire damage). Lower-case type names. */
 function normDt(v){const a=(Array.isArray(v)?v:String(v||"").split(/[^a-z]+/i)).map(x=>String(x).toLowerCase().trim()).filter(x=>DMG_TYPES.includes(x));
   return a.length?[...new Set(a)]:null;}
 /* a malformed damage-type filter becomes [] (matches nothing) — never "no filter", which would apply it everywhere */
-function fxSanitize(e){if(e&&e.dt!==undefined)e.dt=normDt(e.dt)||[];
-  if(e&&e.on!==undefined&&!scopeValid(e.on))e.on={k:"bad"};} /* a broken target matches nothing — never "everything" */
-/* ---- effect targets ("Applies to") ----
-   e.on narrows an effect to: the item that carries it ({k:"self"}), one inventory item ({k:"item",id}), one spell
-   ({k:"spell",name}), a school ({k:"school",v}), cantrips ({k:"cantrip"}), or — on a buff — something you pick when
-   you switch it on ({k:"ask",what:"weapon"|"armor"|"spell"}, stored in c.buffTargets[buff name]). No e.on = everything.
-   Attack-type targets (to hit, damage, spell DC for that spell) are matched against the attack; any other target
-   with an item scope counts while that item is equipped (and attuned if it needs it). */
-const SCHOOLS=["abjuration","conjuration","divination","enchantment","evocation","illusion","necromancy","transmutation"];
-const ASK_WHAT={weapon:"weapon",armor:"armor or shield",spell:"spell"};
-function scopeValid(on){if(!on||typeof on!=="object")return false;
-  const str=x=>typeof x==="string"&&x.length>0;
-  switch(on.k){case "self":case "cantrip":return true;
-    case "item":return str(on.id);case "spell":return str(on.name);
-    case "school":return SCHOOLS.includes(on.v);case "ask":return !!ASK_WHAT[on.what];}
-  return false;}
-function scopeEnc(on){if(!on)return "";
-  return ({self:"self",cantrip:"cantrip",item:"item:"+on.id,spell:"spell:"+on.name,school:"school:"+on.v,ask:"ask:"+on.what})[on.k]||"bad";}
-function scopeDec(v){if(!v)return null;if(v==="self"||v==="cantrip")return {k:v};
-  const i=v.indexOf(":");if(i<0)return null;const k=v.slice(0,i),r=v.slice(i+1);
-  const o=k==="item"?{k,id:r}:k==="spell"?{k,name:r}:k==="school"?{k,v:r}:k==="ask"?{k,what:r}:null;
-  return o&&scopeValid(o)?o:null;}
-function itemById(c,id){return ((c.inventory||{}).items||[]).find(it=>it.id===id)||null;}
-function scopeLabel(c,on){if(!on)return "";
-  switch(on.k){case "self":return "this item";case "cantrip":return "cantrips";
-    case "item":{const it=c&&itemById(c,on.id);return it?it.name:"a removed item";}
-    case "spell":return on.name;case "school":return on.v.charAt(0).toUpperCase()+on.v.slice(1)+" spells";
-    case "ask":return "the "+ASK_WHAT[on.what]+" you pick";}
-  return "nothing (broken target)";}
-/* does a (resolved) scope let this effect count here? ctx.atk marks an attack's own context */
-function scopeMatch(c,on,ctx){if(!on)return true;
-  if(on.k==="item"){if(ctx&&ctx.atk)return ctx.itemId===on.id;const it=itemById(c,on.id);return !!it&&itemActive(it);}
-  if(!ctx||!ctx.atk)return false;
-  if(on.k==="spell")return ctx.spell===on.name;
-  if(on.k==="school")return !!ctx.school&&ctx.school===on.v;
-  if(on.k==="cantrip")return !!ctx.cantrip;
-  return false;}
+function fxSanitize(e){if(e&&e.dt!==undefined)e.dt=normDt(e.dt)||[];}
 const dtLabel=dt=>dt&&dt.length?" ("+esc(dt.join("/"))+" only)":"";
 /* Auto-attached effects for well-known features (matched on feature name) */
 const KNOWN_EFFECTS=[
@@ -918,9 +882,6 @@ function migrate(c){ /* upgrade older saves in place — must survive partial, o
   c.notes=typeof c.notes==="string"?c.notes:"";
   c.activeBuffs=_arr(c.activeBuffs,[]);
   c.customBuffs=_arr(c.customBuffs,[]).filter(b=>b&&b.name);
-  c.customBuffs.forEach(b=>{if(Array.isArray(b.fx))b.fx.forEach(fxSanitize);});
-  {const bt=c.buffTargets&&typeof c.buffTargets==="object"&&!Array.isArray(c.buffTargets)?c.buffTargets:{};c.buffTargets={};
-   Object.keys(bt).forEach(k=>{const o=bt[k];if(o&&(o.k==="item"||o.k==="spell")&&scopeValid(o))c.buffTargets[k]=o.k==="item"?{k:"item",id:o.id}:{k:"spell",name:o.name};});}
   if(c.concentration===undefined)c.concentration=null;
   if(!c.wildSurge||typeof c.wildSurge!=="object"||!(+c.wildSurge.n>=1&&+c.wildSurge.n<=8))c.wildSurge=null;
   c.journal=_arr(c.journal,[]);
@@ -1028,20 +989,16 @@ function evalFormula(c,v,raw){ /* number | formula with prof, level, str…cha (
 function itemActive(it){return it.equipped&&!(it.needsAttune&&!it.attuned);}
 function activeEffects(c){
   const out=[];
-  /* owner: the carrying item's id (resolves "this item only"); buff: the buff's name (resolves "ask when switched on") */
-  const add=(src,e,extra,owner,buff)=>{if(!e||!e.t)return;
+  const add=(src,e,extra)=>{if(!e||!e.t)return;
     if(e.when==="armored"&&!equippedArmor(c))return;
     if(e.when==="unarmored"&&equippedArmor(c))return;
     if(e.ed&&e.ed!==(c.edition||"2014"))return; /* edition-specific rule */
-    let on=e.on;
-    if(on&&on.k==="self"){if(!owner)return;on={k:"item",id:owner,self:true};}
-    else if(on&&on.k==="ask"){const tg=buff&&(c.buffTargets||{})[buff];if(!tg)return;on={...tg};}
-    const o={src,t:e.t,v:e.v};if(e.ab)o.ab=e.ab;if(e.dt)o.dt=e.dt;if(on)o.on=on;if(extra)Object.assign(o,extra);
+    const o={src,t:e.t,v:e.v};if(e.ab)o.ab=e.ab;if(e.dt)o.dt=e.dt;if(extra)Object.assign(o,extra);
     out.push(o);};
   (c.features||[]).forEach(f=>(f.effects||[]).forEach(e=>add(f.name,e)));
-  ((c.inventory||{}).items||[]).forEach(it=>{if(itemActive(it))(it.effects||[]).forEach(e=>add(it.name,e,null,it.id));});
+  ((c.inventory||{}).items||[]).forEach(it=>{if(itemActive(it))(it.effects||[]).forEach(e=>add(it.name,e));});
   (c.activeBuffs||[]).forEach(bn=>{const b=allBuffs(c).find(x=>x.name===bn);
-    if(b)(b.fx||[]).forEach(e=>add((b.ic||"🔆")+" "+b.name,e,{buff:b.name,ic:b.ic||"🔆"},null,b.name));});
+    if(b)(b.fx||[]).forEach(e=>add((b.ic||"🔆")+" "+b.name,e,{buff:b.name,ic:b.ic||"🔆"}));});
   {const ws=surgeNow(c);if(ws&&ws.n===6)add("💠 Wild Surge: protective lights",{t:"ac",v:1});}
   ruleEffects(c).forEach(e=>out.push(e)); /* rules the app applies for you — same pipeline, so they show in every ⓘ breakdown */
   return out;}
@@ -1088,15 +1045,11 @@ function toggleBuff(name,opts){const c=cur();opts=opts||{};
   const b=allBuffs(c).find(x=>x.name===name);
   if(buffOn(c,name)){
     c.activeBuffs=c.activeBuffs.filter(x=>x!==name);
-    if(c.buffTargets)delete c.buffTargets[name];
     if(b&&b.conc&&c.concentration===name)c.concentration=null;
     if(name==="Rage")c.wildSurge=null; /* the surge ends with the rage */
     toast("◻️ "+esc(name)+" off");}
   else{
-    const what=buffAsk(b);
-    if(what&&!opts.target){buffTargetPicker(name,what);return;} /* "ask when switched on": pick first, then activate */
     if(b&&b.conc&&concentrationBlocked(name))return;
-    if(what){c.buffTargets=c.buffTargets||{};c.buffTargets[name]=opts.target;}
     let rageNote="";
     if(name==="Rage"){const rf=rageFeature(c);
       if(rf){const mx=maxUses(c,rf);const left=rf.usesLeft??mx;
@@ -1106,23 +1059,9 @@ function toggleBuff(name,opts){const c=cur();opts=opts||{};
         rageNote=" · "+(rf.usesLeft??mx)+"/"+mx+" rages left";}}
     c.activeBuffs.push(name);
     if(b&&b.conc)setConcentration(name);
-    toast((b&&b.ic||"🔆")+" "+esc(name)+" active"+(opts.target?" on "+esc(scopeLabel(c,opts.target)):"")+(b&&b.note?" — "+esc(b.note):"")+rageNote);
+    toast((b&&b.ic||"🔆")+" "+esc(name)+" active"+(b&&b.note?" — "+esc(b.note):"")+rageNote);
     if(name==="Rage"&&hasWildSurge(c)){c.wildSurge=null;touch();renderTab();surgeChoice("rage");return;}}
   touch();renderTab();}
-/* A buff whose bonuses say "ask when switched on" needs a target before it can be active. */
-function buffAsk(b){const e=((b&&b.fx)||[]).find(x=>x&&x.on&&x.on.k==="ask");return e?e.on.what:null;}
-function buffTargetChoices(c,what){
-  if(what==="spell")return ((c.spellcasting||{}).spells||[]).map(s=>({on:{k:"spell",name:s.name},label:s.name,sub:s.level?"level "+s.level:"cantrip"}));
-  const cats=what==="weapon"?["Weapon"]:["Armor","Shield"];
-  return ((c.inventory||{}).items||[]).filter(it=>cats.includes(it.cat))
-    .map(it=>({on:{k:"item",id:it.id},label:it.name,sub:(it.equipped?"equipped":"not equipped")+(it.needsAttune&&!it.attuned?" · not attuned":"")}));}
-function buffTargetPicker(name,what){const c=cur();const ch=buffTargetChoices(c,what);
-  if(!ch.length){toast("No "+ASK_WHAT[what]+(what==="spell"?" on the Spells tab":" in Items")+" to put "+esc(name)+" on — add one first",4000);return;}
-  openModal(`<h2>${esc(name)} — which ${esc(ASK_WHAT[what])}? ${XBTN}</h2>
-   ${ch.map((x,k)=>`<button class="li" style="display:block;width:100%;text-align:left" onclick="pickBuffTarget('${jstr(name)}','${what}',${k})">
-     <div style="font-weight:600">${esc(x.label)}</div><div class="li-sub">${esc(x.sub)}</div></button>`).join("")}`);}
-function pickBuffTarget(name,what,k){const c=cur();const x=buffTargetChoices(c,what)[k];if(!x)return;
-  closeModal();toggleBuff(name,{target:x.on});}
 /* ---- Wild Surge (Path of Wild Magic barbarian) ----
    The surge lives in c.wildSurge = {n:1..8} but only counts while the Rage buff is on, so anything
    that ends the rage (toggling it off, a long rest, an undo) also ends the surge without extra bookkeeping. */
@@ -1295,14 +1234,13 @@ function bonusDetail(c,target,ctx){
   const raw=target.startsWith("abl.");
   const [dom]=target.split(".");
   return activeEffects(c).filter(e=>{
-    if(e.on&&!scopeMatch(c,e.on,ctx))return false;
     if(e.ab&&!(ctx&&ctx.ab===e.ab))return false;
     if(e.dt&&!(ctx&&ctx.dt&&e.dt.some(x=>ctx.dt.includes(x))))return false;
     if(e.t===target)return true;
     const [d,k]=e.t.split(".");
     if(target==="dmg.spell")return false; /* "All weapon damage" (dmg.all) is for weapons only */
     return d===dom&&k==="all"&&target!==dom+".all";})
-   .map(e=>({src:e.src+(e.on&&!e.on.self?" → "+scopeLabel(c,e.on):""),v:evalFormula(c,e.v,raw),buff:e.buff,ic:e.ic,dt:e.dt,on:e.on})).filter(b=>b.v);}
+   .map(e=>({src:e.src,v:evalFormula(c,e.v,raw),buff:e.buff,ic:e.ic,dt:e.dt})).filter(b=>b.v);}
 function bonusFor(c,target,ctx){return bonusDetail(c,target,ctx).reduce((s,b)=>s+b.v,0);}
 function abl(c,a){return c.abilities[a]+bonusFor(c,"abl."+a);}
 function amod(c,a){return mod(abl(c,a));}
@@ -1459,7 +1397,7 @@ function attackBreakdown(c,a,lvl){const ctx=atkCtx(a,c);const spell=isSpellAtk(a
     hit.push(["Base",8],["Proficiency",profBonus(c)]);
     if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier"+(a.useCasting?" (casting ability)":""),amod(c,ctx.ab)]);
     if(+a.bonusMisc)hit.push(["Misc",+a.bonusMisc]);
-    bonusDetail(c,"spell.dc",ctx).forEach(b=>hit.push([esc(b.src),b.v]));}
+    bonusDetail(c,"spell.dc").forEach(b=>hit.push([esc(b.src),b.v]));}
   else if(!isAutoSpell(a)){
     if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier"+(spell&&a.useCasting?" (casting ability)":""),amod(c,ctx.ab)]);
     if(attackProf(c,a))hit.push(["Proficiency",profBonus(c)]);
@@ -1519,46 +1457,19 @@ function explainHP(){const c=cur();
 /* ---- effects editor (shared by features & items) ---- */
 function fxOptions(sel){return EFFECT_GROUPS.map(([g,list])=>`<optgroup label="${g}">${list.map(([t,l])=>`<option value="${t}" ${t===sel?"selected":""}>${l}</option>`).join("")}</optgroup>`).join("");}
 /* Fields the editor has no input for (ab, ed, when…) ride along in data-x so saving a feature never strips them. */
-/* mode = what the editor belongs to: "item" (adds "This item only"), "buff" (adds "Ask when switched on"),
-   "feature" (character feature or custom feat). New rows on a weapon default to "This item only". */
-let _fxMode="feature";
-function scopeOptions(sel,mode){const c=cur();
-  const items=c?((c.inventory||{}).items||[]):[],spells=c?((c.spellcasting||{}).spells||[]):[];
-  let found=!sel;
-  const o=(v,l)=>{if(v===sel)found=true;return `<option value="${esc(v)}" ${v===sel?"selected":""}>${esc(l)}</option>`;};
-  const grp=(label,list)=>list.length?`<optgroup label="${esc(label)}">${list.join("")}</optgroup>`:"";
-  let h=o("","Applies to: everything");
-  if(mode==="item")h+=o("self","Applies to: this item only");
-  h+=o("cantrip","Applies to: cantrips only");
-  h+=grp("One weapon",items.filter(it=>it.cat==="Weapon").map(it=>o("item:"+it.id,it.name)));
-  h+=grp("One armor or shield",items.filter(it=>it.cat==="Armor"||it.cat==="Shield").map(it=>o("item:"+it.id,it.name)));
-  h+=grp("One spell",spells.map(sp=>o("spell:"+sp.name,sp.name)));
-  h+=grp("Spells of a school",SCHOOLS.map(v=>o("school:"+v,v.charAt(0).toUpperCase()+v.slice(1))));
-  if(mode==="buff")h+=grp("Ask when switched on",Object.keys(ASK_WHAT).map(w=>o("ask:"+w,"Ask which "+ASK_WHAT[w])));
-  if(!found)h+=`<option value="${esc(sel)}" selected>⚠️ ${esc(scopeLabel(c,scopeDec(sel)||{k:"bad"}))} — not available here</option>`;
-  return h;}
-/* Fields the editor has no input for (ab, ed, when…) ride along in data-x so saving a feature never strips them. */
-function fxRow(e,mode,defScope){const {t,v,dt,on,...x}=e||{};const isDmg=/^dmg\./.test(t||"");mode=mode||_fxMode;
-  const sel=e?scopeEnc(on):(defScope||"");
-  return `<div class="fxrow" style="margin-bottom:8px" data-x="${esc(JSON.stringify(x))}"><div class="row">
+function fxRow(e){const {t,v,dt,...x}=e||{};const isDmg=/^dmg\./.test(t||"");
+  return `<div class="fxrow" style="margin-bottom:6px" data-x="${esc(JSON.stringify(x))}"><div class="row">
   <select class="fxT" style="flex:2" onchange="const d=this.closest('.fxrow').querySelector('.fxD');d.style.display=/^dmg\./.test(this.value)?'':'none'">${fxOptions(t)}</select>
   <input class="fxV" style="flex:1" placeholder="1, prof, cha…" value="${esc(v!=null?v:"")}">
   <button class="iconbtn" style="flex:none" onclick="this.closest('.fxrow').remove()">✕</button></div>
-  <input class="fxD" style="margin-top:4px;${isDmg?"":"display:none"}" placeholder="only for damage types (optional): e.g. radiant, fire" value="${esc((dt||[]).join(", "))}">
-  <select class="fxS" style="margin-top:4px" title="What this bonus applies to">${scopeOptions(sel,mode)}</select></div>`;}
-function fxAddRow(){const weapon=_fxMode==="item"&&($("#it_cat")||{}).value==="Weapon";
-  $('#fxList').insertAdjacentHTML('beforeend',fxRow(null,_fxMode,weapon?"self":""));}
-function fxEditor(effects,mode){_fxMode=mode||"feature";return `<label>Effects — automatic bonuses</label>
-  <div id="fxList">${(effects||[]).map(e=>fxRow(e,_fxMode)).join("")}</div>
-  <button class="btn ghost small" type="button" onclick="fxAddRow()">＋ Add bonus</button>
-  <div class="dim" style="margin-top:3px">Value: number or formula (<b>prof</b>, <b>level</b>, <b>str…cha</b>) — e.g. "1", "max(1,cha)". For resistances/immunities just pick the target — no value needed. <b>Applies to</b> narrows a bonus to one weapon, armor, spell, school or cantrips${_fxMode==="buff"?", or asks you which one each time you switch the buff on":""}.</div>`;}
+  <input class="fxD" style="margin-top:4px;${isDmg?"":"display:none"}" placeholder="only for damage types (optional): e.g. radiant, fire" value="${esc((dt||[]).join(", "))}"></div>`;}
+function fxEditor(effects){return `<label>Effects — automatic bonuses</label>
+  <div id="fxList">${(effects||[]).map(fxRow).join("")}</div>
+  <button class="btn ghost small" type="button" onclick="$('#fxList').insertAdjacentHTML('beforeend',fxRow())">＋ Add bonus</button>
+  <div class="dim" style="margin-top:3px">Value: number or formula (<b>prof</b>, <b>level</b>, <b>str…cha</b>) — e.g. "1", "max(1,cha)". For resistances/immunities just pick the target — no value needed.</div>`;}
 function fxCollect(){return $$("#fxList .fxrow").map(r=>{
   const t=r.querySelector(".fxT").value,vr=r.querySelector(".fxV").value.trim();
   let x={};try{x=JSON.parse(r.dataset.x||"{}")||{};}catch(e){x={};}
-  const {on:_old,...rest}=x;x=rest;
-  const sEl=r.querySelector(".fxS");const on=sEl?scopeDec(sEl.value):null;
-  if(sEl&&sEl.value&&!on)x.on={k:"bad"}; /* unknown target kept broken (matches nothing), never widened */
-  if(on)x.on=on;
   if(!vr){if(isDefTarget(t))return {...x,t,v:1};return null;}
   const e={...x,t,v:/^-?\d+$/.test(vr)?+vr:vr};
   const dtTxt=/^dmg\./.test(t)?r.querySelector(".fxD").value.trim():"";
@@ -2056,7 +1967,7 @@ function renderMain(){const c=cur();const pb=profBonus(c);
       ${c.concentration?`<button class="pill on" onclick="dropConcentration()" title="tap to drop">🧠 ${esc(c.concentration)} ✕</button>`:'<span class="dim">buffs & concentration</span>'}</div>
     <div class="cond-grid">${allBuffs(c).map(b=>`<button class="pill ${buffOn(c,b.name)?"on":""}" title="${esc(b.note||"")}" onclick="toggleBuff('${jstr(b.name)}')">${b.ic||"🔆"} ${esc(b.name)}</button>`).join("")}
       <button class="pill" onclick="editCustomBuff(-1)">＋ Custom</button></div>
-    ${(c.activeBuffs||[]).length?`<div class="dim" style="margin-top:6px">${c.activeBuffs.map(bn=>{const b=allBuffs(c).find(x=>x.name===bn);const tg=(c.buffTargets||{})[bn];return b?esc(b.name)+(tg?" → "+esc(scopeLabel(c,tg)):"")+(b.note?": "+esc(b.note):""):"";}).filter(Boolean).join(" · ")}</div>`:""}
+    ${(c.activeBuffs||[]).length?`<div class="dim" style="margin-top:6px">${c.activeBuffs.map(bn=>{const b=allBuffs(c).find(x=>x.name===bn);return b?esc(b.name)+(b.note?": "+esc(b.note):""):"";}).filter(Boolean).join(" · ")}</div>`:""}
   </div>
 
   <div class="card">
@@ -2317,11 +2228,8 @@ function attackAbility(c,a){
 function attackProf(c,a){return isSpellAtk(a)&&a.useCasting?true:!!a.proficient;}
 /* The attack's own context: which ability it uses and which damage types it deals.
    Effects tied to an ability (Rage → Strength) or to damage types (Radiant Soul → radiant/fire) read it. */
-function atkCtx(a,c){c=c||cur();const dt=[...new Set((a.dmgParts||[]).flatMap(p=>normDt(p.t)||[]))];
-  const ctx={atk:true,ab:attackAbility(c,a),dt,itemId:a.itemId||null};
-  if(isSpellAtk(a)){const sp=linkedSpell(c,a);ctx.spell=sp?sp.name:null;ctx.cantrip=spellLevelOf(c,a)===0;
-    ctx.school=sp&&sp.school?String(sp.school).toLowerCase().trim():null;}
-  return ctx;}
+function atkCtx(a,c){const dt=[...new Set((a.dmgParts||[]).flatMap(p=>normDt(p.t)||[]))];
+  return {ab:attackAbility(c||cur(),a),dt};}
 function linkedSpell(c,a){
   return isSpellAtk(a)&&a.spellRef?((c.spellcasting||{}).spells||[]).find(s=>s.name===a.spellRef)||null:null;}
 function linkedAttackIndex(c,spellName){return (c.attacks||[]).findIndex(a=>isSpellAtk(a)&&a.spellRef===spellName);}
@@ -2358,7 +2266,7 @@ function attackBonus(c,a){let b=+a.bonusMisc||0;const ab=attackAbility(c,a);
   b+=(isSpellAtk(a)?0:(+a.magic||0))+bonusFor(c,atkTarget(a),atkCtx(a,c));return b;}
 /* misc bonus means "to hit" on an attack roll and "to the DC" on a save spell */
 function attackSaveDC(c,a){const ab=attackAbility(c,a);
-  return 8+profBonus(c)+(ab?amod(c,ab):0)+(+a.bonusMisc||0)+bonusFor(c,"spell.dc",atkCtx(a,c));}
+  return 8+profBonus(c)+(ab?amod(c,ab):0)+(+a.bonusMisc||0)+bonusFor(c,"spell.dc");}
 function attackHitLabel(c,a){return isSaveSpell(a)?"DC "+attackSaveDC(c,a)+" "+a.save.toUpperCase():isAutoSpell(a)?"Auto":fmt(attackBonus(c,a));}
 function attackDiceExtras(c,a){return isSpellAtk(a)?[]:buffDmgExtras(c);} /* buff dice (Enlarge…) are weapon damage */
 /* Flat damage per damage part. Ordinary bonuses ride on the first part; a bonus limited to damage types
@@ -2601,7 +2509,7 @@ function editCustomBuff(i){const c=cur();
    <div class="spacer"></div>
    <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px"><input type="checkbox" id="cb_conc" ${b.conc?"checked":""}> Requires concentration</label>
    <div class="spacer"></div>
-   ${fxEditor(b.fx,"buff")}
+   ${fxEditor(b.fx)}
    <div class="spacer"></div>
    <div class="grid3">
     <div><label>d20 dice (e.g. 1d4, -1d4)</label><input id="cb_d20" value="${esc(b.d20?b.d20.dice:"")}"></div>
@@ -3094,13 +3002,6 @@ function spellMenu(i){const c=cur();const s=c.spellcasting.spells[i];const ai=li
     <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();editCustomSpell(${i})">✏️ Edit</button>
     <button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="closeModal();setupSpellAttack(${i})">⚔️ ${ai>=0?"Edit attack":"Set up attack (damage, save, upcast…)"}</button>
     <button class="btn danger" style="width:100%" onclick="removeSpell(${i})">🗑️ Remove</button>`);}
-/* "Applies to: <spell>" follows a renamed spell — in features, items, custom buffs and the active buff targets. */
-function renameSpellScopes(c,from,to){
-  const fix=e=>{if(e&&e.on&&e.on.k==="spell"&&e.on.name===from)e.on.name=to;};
-  (c.features||[]).forEach(f=>(f.effects||[]).forEach(fix));
-  ((c.inventory||{}).items||[]).forEach(it=>(it.effects||[]).forEach(fix));
-  (c.customBuffs||[]).forEach(b=>(b.fx||[]).forEach(fix));
-  Object.values(c.buffTargets||{}).forEach(o=>{if(o.k==="spell"&&o.name===from)o.name=to;});}
 /* Removing a spell keeps its attack on Main (you may still want it) but unlinks it; its level is kept for upcasting. */
 function removeSpell(i){const c=cur();const s=c.spellcasting.spells[i];if(!s)return;
   let n=0;(c.attacks||[]).forEach(a=>{if(isSpellAtk(a)&&a.spellRef===s.name){a.spellLevel=+s.level||0;delete a.spellRef;n++;}});
@@ -3231,7 +3132,7 @@ function saveCustomSpell(i){const sc=cur().spellcasting;
   if(uses)s.usesLeft=Math.min(old.usesLeft??uses,uses);
   if(i>=0&&old.name!==s.name&&sc.spells.some((x,j)=>j!==i&&x.name===s.name)){toast("⚠️ You already have a spell called "+esc(s.name));return;}
   if(i>=0&&old.name&&old.name!==s.name) /* renaming keeps its attack linked */
-    {(cur().attacks||[]).forEach(a=>{if(isSpellAtk(a)&&a.spellRef===old.name)a.spellRef=s.name;});renameSpellScopes(cur(),old.name,s.name);}
+    (cur().attacks||[]).forEach(a=>{if(isSpellAtk(a)&&a.spellRef===old.name)a.spellRef=s.name;});
   (cur().attacks||[]).forEach(a=>{if(isSpellAtk(a)&&a.spellRef===s.name)a.spellLevel=s.level;}); /* keep the fallback level in step */
   i>=0?sc.spells[i]=s:sc.spells.push(s);touch();closeModal();renderTab();}
 function castItemSpell(i){const s=cur().spellcasting.spells[i];const mx=+s.uses||0;
@@ -3357,7 +3258,7 @@ function editItem(i){const inv=cur().inventory;
    <div class="spacer"></div>
    <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px"><input type="checkbox" id="it_att" ${it.needsAttune?"checked":""}> Bonuses require attunement</label>
    <div class="spacer"></div>
-   ${fxEditor(it.effects,"item")}
+   ${fxEditor(it.effects)}
    <div class="spacer"></div><label>Description</label><textarea id="it_desc">${esc(it.desc||"")}</textarea>
    <div class="spacer"></div><label>Notes</label><input id="it_notes" value="${esc(it.notes||"")}">
    <div class="spacer"></div><div class="row">
@@ -5196,66 +5097,6 @@ function runSelfTests(){
     eq(spellPlan(c,c.attacks[0],5).parts[0].d,"10d6","still upcasts from level 3");});
   t("weapons are untouched by the spell pipeline",()=>{const c=wiz(9,x=>{x.attacks.push({name:"Axe",kind:"melee",ability:"str",proficient:true,addAbility:true,magic:1,bonusMisc:0,dmgParts:[{d:"1d8",t:"slashing"}]});});
     const p=spellPlan(c,c.attacks[0],9);eq(p.parts[0].d,"1d8");eq(p.rays,1);eq(attackBonus(c,c.attacks[0]),profBonus(c)+1);});
-  /* ---- targeted effects ("Applies to") ---- */
-  const tgt=more=>mk(x=>{x.classes=[{name:"Wizard",subclass:"",level:5}];x.abilities.int=16;x.abilities.str=14;x.spellcasting.ability="int";
-    x.inventory.items.push({id:"sw",name:"Longsword",cat:"Weapon",qty:1,equipped:true,effects:[]},
-      {id:"ax",name:"Handaxe",cat:"Weapon",qty:1,equipped:true,effects:[]},
-      {id:"sh",name:"Shield",cat:"Shield",qty:1,equipped:true,effects:[]});
-    x.attacks.push({name:"Longsword",itemId:"sw",kind:"melee",ability:"str",proficient:true,addAbility:true,magic:0,bonusMisc:0,dmgParts:[{d:"1d8",t:"slashing"}]},
-      {name:"Handaxe",itemId:"ax",kind:"melee",ability:"str",proficient:true,addAbility:true,magic:0,bonusMisc:0,dmgParts:[{d:"1d6",t:"slashing"}]});
-    x.spellcasting.spells.push({name:"Fire Bolt",level:0,school:"Evocation"},{name:"Fireball",level:3,school:"Evocation"},{name:"Ray of Sickness",level:1,school:"Necromancy"});
-    x.attacks.push({name:"Fire Bolt",kind:"spell",useCasting:true,spellRef:"Fire Bolt",spellLevel:0,dmgParts:[{d:"1d10",t:"fire"}]},
-      {name:"Fireball",kind:"spell",useCasting:true,spellRef:"Fireball",spellLevel:3,save:"dex",dmgParts:[{d:"8d6",t:"fire"}]},
-      {name:"Ray of Sickness",kind:"spell",useCasting:true,spellRef:"Ray of Sickness",spellLevel:1,dmgParts:[{d:"2d8",t:"poison"}]});
-    if(more)more(x);});
-  t("no target = everything (old behaviour kept)",()=>{const c=tgt(x=>{x.features.push({name:"Dueling-ish",effects:[{t:"dmg.melee",v:2}]});});
-    eq(attackDmgExtra(c,c.attacks[0]),2+2);eq(attackDmgExtra(c,c.attacks[1]),2+2);});
-  t("this item only: a weapon's own bonus stays on that weapon",()=>{const c=tgt(x=>{x.inventory.items[0].effects=[{t:"dmg.melee",v:3,on:{k:"self"}},{t:"atk.melee",v:1,on:{k:"self"}}];});
-    eq(attackDmgExtra(c,c.attacks[0]),2+3,"Longsword");eq(attackDmgExtra(c,c.attacks[1]),2,"Handaxe untouched");
-    eq(attackBonus(c,c.attacks[0])-attackBonus(c,c.attacks[1]),1);
-    ok(!attackBreakdown(c,c.attacks[0]).dmg.some(r=>/→/.test(r[0])),"own item: no arrow label");
-    c.inventory.items[0].equipped=false;eq(attackDmgExtra(c,c.attacks[0]),2,"unequipped: gone");});
-  t("one weapon / one shield from a feature",()=>{const c=tgt(x=>{x.features.push({name:"Pact Blade",effects:[{t:"dmg.all",v:1,on:{k:"item",id:"ax"}},{t:"ac",v:1,on:{k:"item",id:"sh"}}]});});
-    eq(attackDmgExtra(c,c.attacks[1]),2+1);eq(attackDmgExtra(c,c.attacks[0]),2);
-    ok(attackBreakdown(c,c.attacks[1]).dmg.some(r=>r[0]==="Pact Blade → Handaxe"&&r[1]===1),"named with its target");
-    eq(bonusFor(c,"ac"),1,"shield equipped");c.inventory.items[2].equipped=false;eq(bonusFor(c,"ac"),0,"shield off: no AC bonus");});
-  t("one spell, a school, cantrips only",()=>{const c=tgt(x=>{x.features.push({name:"Agonizing",effects:[{t:"dmg.spell",v:"cha",on:{k:"spell",name:"Fire Bolt"}}]},
-      {name:"Empowered Evocation",effects:[{t:"dmg.spell",v:"int",on:{k:"school",v:"evocation"}}]},
-      {name:"Potent",effects:[{t:"spell.atk",v:1,on:{k:"cantrip"}}]},{name:"Focus",effects:[{t:"spell.dc",v:1,on:{k:"spell",name:"Fireball"}}]});x.abilities.cha=14;});
-    const [,,fb,fbl,ray]=c.attacks;
-    eq(attackDmgExtra(c,fb),2+3,"Fire Bolt: Agonizing + Evocation");eq(attackDmgExtra(c,fbl),3,"Fireball: Evocation only");eq(attackDmgExtra(c,ray),0,"Necromancy: nothing");
-    eq(attackBonus(c,fb)-attackBonus(c,ray),1,"cantrips only");
-    eq(attackSaveDC(c,fbl),spellDC(c)+1,"DC bonus only for that spell");eq(bonusFor(c,"spell.dc"),0,"Spells tab DC unchanged");
-    eq(spellAtkMod(c),profBonus(c)+3,"Spells tab spell attack ignores scoped bonuses");
-    c.spellcasting.spells[1].school="Abjuration";eq(attackDmgExtra(c,fbl),0,"school follows the spell");});
-  t("broken or removed targets match nothing",()=>{const c=tgt(x=>{x.features.push({name:"Gone",effects:[{t:"dmg.all",v:5,on:{k:"item",id:"nope"}}]});});
-    const m=migrate({...newCharacter(),features:[{name:"F",effects:[{t:"dmg.all",v:5,on:{k:"potato"}},{t:"dmg.all",v:5,on:{k:"school",v:"cooking"}},{t:"dmg.all",v:5,on:"x"}]}]});
-    ok(m.features[0].effects.every(e=>e.on.k==="bad"),"sanitised to a never-matching target");
-    eq(attackDmgExtra(c,c.attacks[0]),2,"removed item: no bonus");ok(scopeLabel(c,{k:"item",id:"nope"})==="a removed item");});
-  t("buff that asks: the picked target gets it, switching off forgets it",()=>{const c=tgt(x=>{x.customBuffs.push({name:"Magic Weapon (test)",ic:"🔆",conc:true,fx:[{t:"atk.all",v:1,on:{k:"ask",what:"weapon"}},{t:"dmg.all",v:1,on:{k:"ask",what:"weapon"}}]});});
-    let shown="";const keep=openModal;openModal=h=>{shown=h;};
-    try{toggleBuff("Magic Weapon (test)");}finally{openModal=keep;}
-    ok(!buffOn(c,"Magic Weapon (test)"),"not active until a target is picked");ok(/Longsword/.test(shown)&&/Handaxe/.test(shown)&&!/Shield/.test(shown),"weapons offered");
-    pickBuffTarget("Magic Weapon (test)","weapon",1);
-    ok(buffOn(c,"Magic Weapon (test)"));eq(c.buffTargets["Magic Weapon (test)"].id,"ax");eq(c.concentration,"Magic Weapon (test)");
-    eq(attackDmgExtra(c,c.attacks[1]),2+1);eq(attackDmgExtra(c,c.attacks[0]),2);
-    ok(attackBreakdown(c,c.attacks[1]).hit.some(r=>/Magic Weapon \(test\) → Handaxe/.test(r[0])));
-    toggleBuff("Magic Weapon (test)");eq(c.buffTargets["Magic Weapon (test)"],undefined);eq(attackDmgExtra(c,c.attacks[1]),2);});
-  t("asking with nothing to pick refuses and stays off",()=>{const c=tgt(x=>{x.inventory.items=[];x.customBuffs.push({name:"B",fx:[{t:"ac",v:1,on:{k:"ask",what:"armor"}}]});});
-    toggleBuff("B");ok(!buffOn(c,"B"));});
-  t("buff targets are sanitised on load",()=>{const m=migrate({...newCharacter(),buffTargets:{A:{k:"item",id:"x"},B:{k:"school",v:"evocation"},C:"junk",D:{k:"spell",name:""}}});
-    eq(JSON.stringify(m.buffTargets),'{"A":{"k":"item","id":"x"}}');eq(JSON.stringify(migrate({...newCharacter(),buffTargets:[1]}).buffTargets),"{}");});
-  t("renaming a spell carries its targeted bonuses along",()=>{const c=tgt(x=>{x.features.push({name:"Ag",effects:[{t:"dmg.spell",v:2,on:{k:"spell",name:"Fire Bolt"}}]});
-      x.buffTargets={Z:{k:"spell",name:"Fire Bolt"}};});
-    renameSpellScopes(c,"Fire Bolt","Flame Bolt");c.spellcasting.spells[0].name="Flame Bolt";c.attacks[2].spellRef="Flame Bolt";
-    eq(c.features[0].effects[0].on.name,"Flame Bolt");eq(c.buffTargets.Z.name,"Flame Bolt");eq(attackDmgExtra(c,c.attacks[2]),2);});
-  t("the effects editor round-trips targets",()=>{tgt();
-    const box=document.createElement("div");box.id="fxList";box.style.display="none";document.body.appendChild(box);
-    try{box.innerHTML=fxRow({t:"dmg.all",v:1,on:{k:"item",id:"sw"}},"feature")+fxRow({t:"dmg.spell",v:2,on:{k:"school",v:"evocation"}},"feature")
-        +fxRow({t:"ac",v:1,on:{k:"ask",what:"armor"}},"buff")+fxRow({t:"dmg.melee",v:1},"item")+fxRow({t:"dmg.all",v:1,on:{k:"item",id:"gone"}},"feature");
-      const out=fxCollect();eq(JSON.stringify(out.map(e=>e.on||null)),'[{"k":"item","id":"sw"},{"k":"school","v":"evocation"},{"k":"ask","what":"armor"},null,{"k":"item","id":"gone"}]');
-      box.innerHTML=fxRow(null,"item","self");eq(box.querySelector(".fxS").value,"self","new weapon rows default to this item");
-    }finally{box.remove();}});
   t("editing effects keeps fields the editor doesn't show (ability, damage types)",()=>{
     const box=document.createElement("div");box.id="fxList";box.style.display="none";document.body.appendChild(box);
     try{box.innerHTML=fxRow({t:"dmg.melee",v:"barbarian>=9?3:2",ab:"str",ed:"2014"})+fxRow({t:"dmg.spell",v:"cha",dt:["radiant","fire"]});
