@@ -54,6 +54,12 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.11 — Dice bonuses and spell buffs
+- A damage bonus can now be **dice** (`1d6`, `-1d4`) with an optional damage type ("dice deal: necrotic"). The dice are rolled with each hit (once per ray or beam), shown in the attack's damage, and named in the breakdown. Mixing dice and a number in one bonus (`1d6+2`) is refused, and so are dice on non-damage targets.
+- New target **Any attack damage (weapons and spells)**. "All weapon damage" still doesn't reach spells.
+- **New built-in buffs** in Active effects: 🕯️ Hex (+1d6 necrotic, any attack), 🎯 Hunter's Mark (+1d6 on weapon hits; force in 2024), 🌟 Divine Favor (+1d4 radiant on weapon hits), 🪄 Magic Weapon (+1 to hit and damage with the weapon you pick), 🔥 Elemental Weapon (+1 to hit and +1d4 with the weapon you pick). Divine Favor and Magic Weapon don't need concentration on 2024 sheets.
+- 🦣 Enlarge / 🐭 Reduce and the old custom-buff "Weapon damage dice" field now use the same dice bonuses. Existing custom buffs are converted automatically.
+
 ### New in v1.10 — Bonuses that target one item or spell
 - Every bonus in an Effects editor (features, items, custom buffs) has **Applies to**: everything (as before), *this item only* (items), one weapon, one armor or shield, one spell, spells of a school (Empowered Evocation), or cantrips only (Potent Cantrip).
 - **New bonuses on a weapon default to "this item only"**, so a Flame Tongue's bonus no longer spills onto every other weapon. Bonuses you already have keep applying to everything until you change them.

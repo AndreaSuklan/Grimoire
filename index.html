@@ -334,7 +334,8 @@ const EFFECT_GROUPS=[
  ["Skills",[["skill.all","All skill checks"],...SKILLS.map(s=>["skill."+s[0],s[1]])]],
  ["Combat",[["ac","Armor Class"],["init","Initiative"],["speed","Speed"],["hpmax","Max HP"],["passive","Passive senses"],
   ["atk.all","All weapon attack rolls"],["atk.melee","Melee attack rolls"],["atk.ranged","Ranged attack rolls"],
-  ["dmg.all","All weapon damage"],["dmg.melee","Melee damage"],["dmg.ranged","Ranged damage"]]],
+  ["dmg.all","All weapon damage"],["dmg.melee","Melee damage"],["dmg.ranged","Ranged damage"],
+  ["dmg.any","Any attack damage (weapons and spells)"]]],
  ["Spellcasting",[["spell.dc","Spell save DC"],["spell.atk","Spell attack rolls"],["dmg.spell","Spell damage (Spell attacks)"]]],
  ["Resistances & immunities",[...DMG_TYPES.map(t=>["resist."+t,"Resist "+t]),...DMG_TYPES.map(t=>["immune."+t,"Immune to "+t]),...DMG_TYPES.map(t=>["vuln."+t,"Vulnerable to "+t])]],
  ["Condition immunities",CONDITIONS.map(cd=>["condimm."+cd,"Immune: "+cd])],
@@ -343,13 +344,15 @@ const EFFECT_LABELS=Object.fromEntries(EFFECT_GROUPS.flatMap(g=>g[1]));
 const isDefTarget=t=>/^(resist|immune|vuln|condimm)\./.test(t||"");
 const fxLabel=e=>{
   if(/^custom\./.test(e.t||""))return ({resist:"Resistant to",immune:"Immune to",vuln:"Vulnerable to"}[e.t.split(".")[1]]||"")+" “"+esc(String(e.v))+"”";
-  return esc(EFFECT_LABELS[e.t]||e.t)+(isDefTarget(e.t)?"":" "+esc(String(e.v)))+dtLabel(e.dt)+(e.on?" ("+esc(scopeLabel(typeof cur==="function"?cur():null,e.on))+" only)":"");};
+  return esc(EFFECT_LABELS[e.t]||e.t)+(isDefTarget(e.t)?"":" "+esc(String(e.v))+(e.dType?" "+esc(e.dType):""))+dtLabel(e.dt)+(e.on?" ("+esc(scopeLabel(typeof cur==="function"?cur():null,e.on))+" only)":"");};
 /* Damage-type filter on an effect (e.g. Radiant Soul: only radiant or fire damage). Lower-case type names. */
 function normDt(v){const a=(Array.isArray(v)?v:String(v||"").split(/[^a-z]+/i)).map(x=>String(x).toLowerCase().trim()).filter(x=>DMG_TYPES.includes(x));
   return a.length?[...new Set(a)]:null;}
 /* a malformed damage-type filter becomes [] (matches nothing) — never "no filter", which would apply it everywhere */
 function fxSanitize(e){if(e&&e.dt!==undefined)e.dt=normDt(e.dt)||[];
-  if(e&&e.on!==undefined&&!scopeValid(e.on))e.on={k:"bad"};} /* a broken target matches nothing — never "everything" */
+  if(e&&e.on!==undefined&&!scopeValid(e.on))e.on={k:"bad"}; /* a broken target matches nothing — never "everything" */
+  if(e&&isDiceVal(e.v)&&!/^dmg\./.test(e.t||""))e.v=0; /* dice only mean something on damage */
+  if(e&&e.dType!==undefined){const d=normDt(e.dType);if(d)e.dType=d[0];else delete e.dType;}}
 /* ---- effect targets ("Applies to") ----
    e.on narrows an effect to: the item that carries it ({k:"self"}), one inventory item ({k:"item",id}), one spell
    ({k:"spell",name}), a school ({k:"school",v}), cantrips ({k:"cantrip"}), or — on a buff — something you pick when
@@ -780,8 +783,15 @@ const BUFFS=[
  {name:"Bane",ic:"😖",d20:{on:["attack","save"],dice:"-1d4"},note:"−1d4 to attacks & saves"},
  {name:"Guidance",ic:"🧭",conc:true,d20:{on:["check"],dice:"1d4"},note:"+1d4 to ability checks (concentration)"},
  {name:"Haste",ic:"💨",conc:true,fx:[{t:"ac",v:2},{t:"speed",v:30}],note:"+2 AC, extra speed, one extra limited action (concentration)"},
- {name:"Enlarge",ic:"🦣",conc:true,dmgDice:"1d4",note:"+1d4 weapon damage, advantage on Str checks & saves (concentration)"},
- {name:"Reduce",ic:"🐭",conc:true,dmgDice:"-1d4",note:"−1d4 weapon damage, disadvantage on Str checks & saves (concentration)"}];
+ {name:"Enlarge",ic:"🦣",conc:true,fx:[{t:"dmg.all",v:"1d4"}],note:"+1d4 weapon damage, advantage on Str checks & saves (concentration)"},
+ {name:"Reduce",ic:"🐭",conc:true,fx:[{t:"dmg.all",v:"-1d4"}],note:"−1d4 weapon damage, disadvantage on Str checks & saves (concentration)"},
+ {name:"Hex",ic:"🕯️",conc:true,fx:[{t:"dmg.any",v:"1d6",dType:"necrotic"}],note:"+1d6 necrotic on your attack hits against the cursed target (concentration)"},
+ {name:"Hunter's Mark",ic:"🎯",conc:true,fx:[{t:"dmg.all",v:"1d6",ed:"2014"},{t:"dmg.all",v:"1d6",dType:"force",ed:"2024"}],note:"+1d6 on weapon hits against the marked target (concentration)"},
+ {name:"Divine Favor",ic:"🌟",conc:true,conc24:false,fx:[{t:"dmg.all",v:"1d4",dType:"radiant"}],note:"+1d4 radiant on weapon hits"},
+ {name:"Magic Weapon",ic:"🪄",conc:true,conc24:false,fx:[{t:"atk.all",v:1,on:{k:"ask",what:"weapon"}},{t:"dmg.all",v:1,on:{k:"ask",what:"weapon"}}],note:"+1 to attack and damage with the chosen weapon (a higher slot gives more: make a custom buff)"},
+ {name:"Elemental Weapon",ic:"🔥",conc:true,fx:[{t:"atk.all",v:1,on:{k:"ask",what:"weapon"}},{t:"dmg.all",v:"1d4",on:{k:"ask",what:"weapon"}}],note:"+1 to hit and +1d4 damage of the chosen element with the chosen weapon (concentration)"}];
+/* concentration can differ by edition (Divine Favor and Magic Weapon dropped it in 2024): conc24 overrides on 2024 sheets */
+function buffConc(c,b){return !!b&&(c&&c.edition==="2024"&&b.conc24!==undefined?!!b.conc24:!!b.conc);}
 /* Point buy & standard array */
 const POINT_COSTS={8:0,9:1,10:2,11:3,12:4,13:5,14:7,15:9};
 const STD_ARRAY=[15,14,13,12,10,8];
@@ -918,7 +928,10 @@ function migrate(c){ /* upgrade older saves in place — must survive partial, o
   c.notes=typeof c.notes==="string"?c.notes:"";
   c.activeBuffs=_arr(c.activeBuffs,[]);
   c.customBuffs=_arr(c.customBuffs,[]).filter(b=>b&&b.name);
-  c.customBuffs.forEach(b=>{if(Array.isArray(b.fx))b.fx.forEach(fxSanitize);});
+  c.customBuffs.forEach(b=>{b.fx=Array.isArray(b.fx)?b.fx:[];
+    if(b.dmgDice!==undefined){const d=String(b.dmgDice||"").replace(/\s+/g,""); /* old "Weapon damage dice" field → an ordinary dice effect */
+      if(isDiceVal(d))b.fx.push({t:"dmg.all",v:d});delete b.dmgDice;}
+    b.fx.forEach(fxSanitize);});
   {const bt=c.buffTargets&&typeof c.buffTargets==="object"&&!Array.isArray(c.buffTargets)?c.buffTargets:{};c.buffTargets={};
    Object.keys(bt).forEach(k=>{const o=bt[k];if(o&&(o.k==="item"||o.k==="spell")&&scopeValid(o))c.buffTargets[k]=o.k==="item"?{k:"item",id:o.id}:{k:"spell",name:o.name};});}
   if(c.concentration===undefined)c.concentration=null;
@@ -1036,7 +1049,7 @@ function activeEffects(c){
     let on=e.on;
     if(on&&on.k==="self"){if(!owner)return;on={k:"item",id:owner,self:true};}
     else if(on&&on.k==="ask"){const tg=buff&&(c.buffTargets||{})[buff];if(!tg)return;on={...tg};}
-    const o={src,t:e.t,v:e.v};if(e.ab)o.ab=e.ab;if(e.dt)o.dt=e.dt;if(on)o.on=on;if(extra)Object.assign(o,extra);
+    const o={src,t:e.t,v:e.v};if(e.ab)o.ab=e.ab;if(e.dt)o.dt=e.dt;if(e.dType)o.dType=e.dType;if(on)o.on=on;if(extra)Object.assign(o,extra);
     out.push(o);};
   (c.features||[]).forEach(f=>(f.effects||[]).forEach(e=>add(f.name,e)));
   ((c.inventory||{}).items||[]).forEach(it=>{if(itemActive(it))(it.effects||[]).forEach(e=>add(it.name,e,null,it.id));});
@@ -1089,13 +1102,13 @@ function toggleBuff(name,opts){const c=cur();opts=opts||{};
   if(buffOn(c,name)){
     c.activeBuffs=c.activeBuffs.filter(x=>x!==name);
     if(c.buffTargets)delete c.buffTargets[name];
-    if(b&&b.conc&&c.concentration===name)c.concentration=null;
+    if(buffConc(c,b)&&c.concentration===name)c.concentration=null;
     if(name==="Rage")c.wildSurge=null; /* the surge ends with the rage */
     toast("◻️ "+esc(name)+" off");}
   else{
     const what=buffAsk(b);
     if(what&&!opts.target){buffTargetPicker(name,what);return;} /* "ask when switched on": pick first, then activate */
-    if(b&&b.conc&&concentrationBlocked(name))return;
+    if(buffConc(c,b)&&concentrationBlocked(name))return;
     if(what){c.buffTargets=c.buffTargets||{};c.buffTargets[name]=opts.target;}
     let rageNote="";
     if(name==="Rage"){const rf=rageFeature(c);
@@ -1105,7 +1118,7 @@ function toggleBuff(name,opts){const c=cur();opts=opts||{};
           if(left>0)rf.usesLeft=left-1;}
         rageNote=" · "+(rf.usesLeft??mx)+"/"+mx+" rages left";}}
     c.activeBuffs.push(name);
-    if(b&&b.conc)setConcentration(name);
+    if(buffConc(c,b))setConcentration(name);
     toast((b&&b.ic||"🔆")+" "+esc(name)+" active"+(opts.target?" on "+esc(scopeLabel(c,opts.target)):"")+(b&&b.note?" — "+esc(b.note):"")+rageNote);
     if(name==="Rage"&&hasWildSurge(c)){c.wildSurge=null;touch();renderTab();surgeChoice("rage");return;}}
   touch();renderTab();}
@@ -1255,10 +1268,6 @@ function buffD20Extras(c,kind){const out=[];
   (c.activeBuffs||[]).forEach(bn=>{const b=allBuffs(c).find(x=>x.name===bn);
     if(b&&b.d20&&b.d20.on.includes(kind)&&b.d20.dice)out.push({name:b.name,dice:b.d20.dice,ic:b.ic||"🔆"});});
   return out;}
-function buffDmgExtras(c){const out=[];
-  (c.activeBuffs||[]).forEach(bn=>{const b=allBuffs(c).find(x=>x.name===bn);
-    if(b&&b.dmgDice)out.push({name:b.name,dice:b.dmgDice,ic:b.ic||"🔆"});});
-  return out;}
 /* ---- concentration ---- */
 function concentrationBlocked(name){ /* ask BEFORE spending the slot/use — cancelling must cost nothing */
   const c=cur();if(!c||!c.concentration||c.concentration===name)return false;
@@ -1291,8 +1300,13 @@ function concCheckModal(dmg){const c=cur();
     <button class="btn ghost" onclick="closeModal()">Kept it</button></div>`);}
 /* ctx = {ab, dt} for one attack: effects tied to an ability (Rage: Strength) count only when the attack uses it,
    and effects tied to damage types (Radiant Soul: radiant/fire) only when the attack deals one of them. */
-function bonusDetail(c,target,ctx){
-  const raw=target.startsWith("abl.");
+/* A damage bonus can be dice ("1d6", "-1d4", "2d6") instead of a number: Hex, Divine Favor, Enlarge…
+   Dice bonuses are rolled with the damage (one set per hit) and never added to flat totals. e.dType = the damage
+   type those dice deal (empty: same as the attack). */
+const DICE_VAL=/^\s*[+-]?\s*\d*d\d+(\s*[+-]\s*\d*d\d+)*\s*$/i;
+const isDiceVal=v=>typeof v==="string"&&DICE_VAL.test(v);
+/* every active effect that reaches this target in this context — the single filter behind numbers AND dice */
+function effectsFor(c,target,ctx){
   const [dom]=target.split(".");
   return activeEffects(c).filter(e=>{
     if(e.on&&!scopeMatch(c,e.on,ctx))return false;
@@ -1300,9 +1314,18 @@ function bonusDetail(c,target,ctx){
     if(e.dt&&!(ctx&&ctx.dt&&e.dt.some(x=>ctx.dt.includes(x))))return false;
     if(e.t===target)return true;
     const [d,k]=e.t.split(".");
+    if(d==="dmg"&&k==="any")return dom==="dmg"&&target!=="dmg.any"; /* any attack damage: weapons and spells */
     if(target==="dmg.spell")return false; /* "All weapon damage" (dmg.all) is for weapons only */
-    return d===dom&&k==="all"&&target!==dom+".all";})
-   .map(e=>({src:e.src+(e.on&&!e.on.self?" → "+scopeLabel(c,e.on):""),v:evalFormula(c,e.v,raw),buff:e.buff,ic:e.ic,dt:e.dt,on:e.on})).filter(b=>b.v);}
+    return d===dom&&k==="all"&&target!==dom+".all";});}
+const fxSrc=(c,e)=>e.src+(e.on&&!e.on.self?" → "+scopeLabel(c,e.on):"");
+function bonusDetail(c,target,ctx){
+  const raw=target.startsWith("abl.");
+  return effectsFor(c,target,ctx).filter(e=>!isDiceVal(e.v))
+   .map(e=>({src:fxSrc(c,e),v:evalFormula(c,e.v,raw),buff:e.buff,ic:e.ic,dt:e.dt,on:e.on})).filter(b=>b.v);}
+/* dice bonuses for a damage target: {label, dice ("+1d6" / "-1d4"), t (type or ""), ic (buffs only)} */
+function diceDetail(c,target,ctx){
+  return effectsFor(c,target,ctx).filter(e=>isDiceVal(e.v)).map(e=>{const d=String(e.v).replace(/\s+/g,"");
+    return {label:fxSrc(c,e),dice:/^[+-]/.test(d)?d:"+"+d,t:e.dType||"",ic:e.buff?e.ic:undefined,buff:e.buff};});}
 function bonusFor(c,target,ctx){return bonusDetail(c,target,ctx).reduce((s,b)=>s+b.v,0);}
 function abl(c,a){return c.abilities[a]+bonusFor(c,"abl."+a);}
 function amod(c,a){return mod(abl(c,a));}
@@ -1476,7 +1499,7 @@ function attackBreakdown(c,a,lvl){const ctx=atkCtx(a,c);const spell=isSpellAtk(a
   if(ctx.ab&&a.addAbility)dmg.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
   if(+a.magic&&!spell)dmg.push(["Magic weapon",+a.magic]);
   bonusDetail(c,dmgTarget(a),ctx).forEach(b=>dmg.push([esc(b.src)+dtLabel(b.dt),b.v]));
-  attackDiceExtras(c,a).forEach(b=>dmg.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
+  attackDiceExtras(c,a).forEach(b=>dmg.push([esc(b.label),b.dice+(b.t?" "+b.t:"")]));
   if(plan.rays>1){const why=[];
     if(plan.tier>1&&a.cantripScale==="rays")why.push("cantrip upgrade");
     if(plan.above>0&&+a.upRays)why.push("upcast +"+plan.above*(+a.upRays));
@@ -1538,30 +1561,37 @@ function scopeOptions(sel,mode){const c=cur();
   if(!found)h+=`<option value="${esc(sel)}" selected>⚠️ ${esc(scopeLabel(c,scopeDec(sel)||{k:"bad"}))} — not available here</option>`;
   return h;}
 /* Fields the editor has no input for (ab, ed, when…) ride along in data-x so saving a feature never strips them. */
-function fxRow(e,mode,defScope){const {t,v,dt,on,...x}=e||{};const isDmg=/^dmg\./.test(t||"");mode=mode||_fxMode;
+function fxRow(e,mode,defScope){const {t,v,dt,on,dType,...x}=e||{};const isDmg=/^dmg\./.test(t||"");mode=mode||_fxMode;
   const sel=e?scopeEnc(on):(defScope||"");
   return `<div class="fxrow" style="margin-bottom:8px" data-x="${esc(JSON.stringify(x))}"><div class="row">
   <select class="fxT" style="flex:2" onchange="const d=this.closest('.fxrow').querySelector('.fxD');d.style.display=/^dmg\./.test(this.value)?'':'none'">${fxOptions(t)}</select>
-  <input class="fxV" style="flex:1" placeholder="1, prof, cha…" value="${esc(v!=null?v:"")}">
+  <input class="fxV" style="flex:1" placeholder="1, prof, cha, 1d6…" value="${esc(v!=null?v:"")}">
   <button class="iconbtn" style="flex:none" onclick="this.closest('.fxrow').remove()">✕</button></div>
-  <input class="fxD" style="margin-top:4px;${isDmg?"":"display:none"}" placeholder="only for damage types (optional): e.g. radiant, fire" value="${esc((dt||[]).join(", "))}">
+  <div class="row fxD" style="margin-top:4px;${isDmg?"":"display:none"}">
+   <input class="fxDF" placeholder="only on attacks dealing (optional): radiant, fire" value="${esc((dt||[]).join(", "))}">
+   <input class="fxDT" placeholder="dice deal (optional): necrotic" value="${esc(dType||"")}"></div>
   <select class="fxS" style="margin-top:4px" title="What this bonus applies to">${scopeOptions(sel,mode)}</select></div>`;}
 function fxAddRow(){const weapon=_fxMode==="item"&&($("#it_cat")||{}).value==="Weapon";
   $('#fxList').insertAdjacentHTML('beforeend',fxRow(null,_fxMode,weapon?"self":""));}
 function fxEditor(effects,mode){_fxMode=mode||"feature";return `<label>Effects — automatic bonuses</label>
   <div id="fxList">${(effects||[]).map(e=>fxRow(e,_fxMode)).join("")}</div>
   <button class="btn ghost small" type="button" onclick="fxAddRow()">＋ Add bonus</button>
-  <div class="dim" style="margin-top:3px">Value: number or formula (<b>prof</b>, <b>level</b>, <b>str…cha</b>) — e.g. "1", "max(1,cha)". For resistances/immunities just pick the target — no value needed. <b>Applies to</b> narrows a bonus to one weapon, armor, spell, school or cantrips${_fxMode==="buff"?", or asks you which one each time you switch the buff on":""}.</div>`;}
+  <div class="dim" style="margin-top:3px">Value: number or formula (<b>prof</b>, <b>level</b>, <b>str…cha</b>) — e.g. "1", "max(1,cha)". For resistances/immunities just pick the target — no value needed. A damage bonus can be dice (<b>1d6</b>, <b>-1d4</b>), rolled with each hit. <b>Applies to</b> narrows a bonus to one weapon, armor, spell, school or cantrips${_fxMode==="buff"?", or asks you which one each time you switch the buff on":""}.</div>`;}
 function fxCollect(){return $$("#fxList .fxrow").map(r=>{
   const t=r.querySelector(".fxT").value,vr=r.querySelector(".fxV").value.trim();
   let x={};try{x=JSON.parse(r.dataset.x||"{}")||{};}catch(e){x={};}
-  const {on:_old,...rest}=x;x=rest;
+  const {on:_old,dType:_dt,...rest}=x;x=rest;
   const sEl=r.querySelector(".fxS");const on=sEl?scopeDec(sEl.value):null;
   if(sEl&&sEl.value&&!on)x.on={k:"bad"}; /* unknown target kept broken (matches nothing), never widened */
   if(on)x.on=on;
   if(!vr){if(isDefTarget(t))return {...x,t,v:1};return null;}
-  const e={...x,t,v:/^-?\d+$/.test(vr)?+vr:vr};
-  const dtTxt=/^dmg\./.test(t)?r.querySelector(".fxD").value.trim():"";
+  const isDmg=/^dmg\./.test(t);
+  if(isDiceVal(vr)&&!isDmg){toast("⚠️ Dice (“"+esc(vr)+"”) only work on damage bonuses — that row was not saved",4500);return null;}
+  if(!isDiceVal(vr)&&/\d\s*d\s*\d/i.test(vr)){toast("⚠️ “"+esc(vr)+"”: use dice alone (1d6) or a number — not both; that row was not saved",4500);return null;}
+  const e={...x,t,v:/^-?\d+$/.test(vr)?+vr:isDiceVal(vr)?vr.replace(/\s+/g,""):vr};
+  const dtTxt=isDmg?r.querySelector(".fxDF").value.trim():"";
+  const dTypeTxt=isDmg&&isDiceVal(vr)?r.querySelector(".fxDT").value.trim():"";
+  if(dTypeTxt){const d=normDt(dTypeTxt);if(d)e.dType=d[0];else toast("⚠️ “"+esc(dTypeTxt)+"” is not a damage type — the dice keep the attack's type",4500);}
   if(dtTxt){const dt=normDt(dtTxt);e.dt=dt||[]; /* nothing recognised: the bonus stays off rather than applying to everything */
     if(!dt)toast("⚠️ No known damage type in “"+esc(dtTxt)+"” — that bonus won't apply until you fix it",4500);}
   return e;}).filter(Boolean);}
@@ -2360,7 +2390,7 @@ function attackBonus(c,a){let b=+a.bonusMisc||0;const ab=attackAbility(c,a);
 function attackSaveDC(c,a){const ab=attackAbility(c,a);
   return 8+profBonus(c)+(ab?amod(c,ab):0)+(+a.bonusMisc||0)+bonusFor(c,"spell.dc",atkCtx(a,c));}
 function attackHitLabel(c,a){return isSaveSpell(a)?"DC "+attackSaveDC(c,a)+" "+a.save.toUpperCase():isAutoSpell(a)?"Auto":fmt(attackBonus(c,a));}
-function attackDiceExtras(c,a){return isSpellAtk(a)?[]:buffDmgExtras(c);} /* buff dice (Enlarge…) are weapon damage */
+function attackDiceExtras(c,a){return diceDetail(c,dmgTarget(a),atkCtx(a,c));} /* Hex, Enlarge… — scoped like any effect */
 /* Flat damage per damage part. Ordinary bonuses ride on the first part; a bonus limited to damage types
    (Radiant Soul) rides on the first part of a matching type, so it is shown — and rolled — where it belongs. */
 function attackDmgFlats(c,a){const parts=a.dmgParts||[];const out=parts.map(()=>0);if(!parts.length)return out;
@@ -2388,7 +2418,7 @@ function attackBuffIcons(c,a,which){
 function attackDmgLabel(c,a,noIcons,lvl){const plan=spellPlan(c,a,lvl);const parts=plan.parts;if(!parts.length)return "";
   const fl=attackDmgFlats(c,a);
   let txt=parts.map((p,j)=>esc(p.d)+(fl[j]?fmt(fl[j]):"")+(p.t?" "+esc(p.t):""))
-    .concat(attackDiceExtras(c,a).map(b=>esc(b.dice).replace(/^\+/,"").replace(/^-/,"− ")))
+    .concat(attackDiceExtras(c,a).map(b=>esc(b.dice).replace(/^\+/,"").replace(/^-/,"− ")+(b.t?" "+esc(b.t):"")))
     .join(" + ").replace(/\+ − /g,"− ");
   if(plan.rays>1)txt=(parts.length>1?"("+txt+")":txt)+" ×"+plan.rays;
   const ics=noIcons?[]:attackBuffIcons(c,a,"dmg");
@@ -2411,7 +2441,7 @@ function rollAttackDamage(i,lvl){const c=cur();const a=c.attacks[i];
       const t=r.total+extra;sub+=t;
       lines.push(`<div><b>${t}</b> ${esc(p.t||"damage")} <span class="dim">${esc(r.detail)}${extra?" "+fmt(extra):""}</span></div>`);});
     attackDiceExtras(c,a).forEach(b=>{const r=rollExpr(b.dice);
-      if(r){sub+=r.total;lines.push(`<div><b>${r.total}</b> <span class="dim">${b.ic} ${esc(b.name)} ${esc(b.dice)}</span></div>`);}});
+      if(r){sub+=r.total;lines.push(`<div><b>${r.total}</b> ${b.t?esc(b.t)+" ":""}<span class="dim">${esc(b.label)} ${esc(r.detail)}</span></div>`);}});
     total+=sub;}
   const lvTxt=plan.above>0?" (level "+plan.lvl+")":"";
   logRoll(a.name+" damage"+lvTxt,total);
@@ -2462,7 +2492,7 @@ function applyDamage(n){const c=cur();if(!c)return;
     dropConcentrationBuffs();}
   else if(c.concentration)concCheckModal(n);}
 function dropConcentrationBuffs(){const c=cur();if(!c||!(c.activeBuffs||[]).length)return;
-  const keep=c.activeBuffs.filter(bn=>{const b=allBuffs(c).find(x=>x.name===bn);return !(b&&b.conc);});
+  const keep=c.activeBuffs.filter(bn=>{const b=allBuffs(c).find(x=>x.name===bn);return !buffConc(c,b);});
   if(keep.length!==c.activeBuffs.length){c.activeBuffs=keep;touch();renderTab();}}
 function applyHealing(n){const c=cur();if(!c)return;
   n=Math.max(0,Math.floor(+n||0));if(!n)return;
@@ -2594,7 +2624,7 @@ function conditionsInfo(){const c=cur();
    <div class="li open"><div class="li-head"><div class="li-title">Exhaustion</div></div>
      <div class="li-body"><p>${esc(EXHAUSTION_TEXT).replace(/\n/g,"</p><p>")}</p></div></div>`);}
 function editCustomBuff(i){const c=cur();
-  const b=i>=0?c.customBuffs[i]:{name:"",note:"",conc:false,fx:[],d20:null,dmgDice:""};
+  const b=i>=0?c.customBuffs[i]:{name:"",note:"",conc:false,fx:[],d20:null};
   openModal(`<h2>${i>=0?"Edit":"New"} buff ${XBTN}</h2>
    <div class="grid2"><div><label>Name</label><input id="cb_name" value="${esc(b.name)}"></div>
    <div><label>Note (shown when toggled)</label><input id="cb_note" value="${esc(b.note||"")}"></div></div>
@@ -2603,11 +2633,12 @@ function editCustomBuff(i){const c=cur();
    <div class="spacer"></div>
    ${fxEditor(b.fx,"buff")}
    <div class="spacer"></div>
-   <div class="grid3">
+   <div class="grid2">
     <div><label>d20 dice (e.g. 1d4, -1d4)</label><input id="cb_d20" value="${esc(b.d20?b.d20.dice:"")}"></div>
     <div><label>Applies to</label><div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:6px">
       ${["attack","save","check"].map(k=>`<label style="display:flex;align-items:center;gap:4px;text-transform:none;font-size:13px;margin:0"><input type="checkbox" class="cb_on" value="${k}" ${b.d20&&b.d20.on.includes(k)?"checked":""}>${k}s</label>`).join("")}</div></div>
-    <div><label>Weapon damage dice</label><input id="cb_dmg" value="${esc(b.dmgDice||"")}" placeholder="1d4"></div></div>
+</div>
+   <div class="dim" style="margin-top:3px">Extra damage dice (Hex, Enlarge…): add a damage bonus above with a dice value such as 1d6.</div>
    <div class="spacer"></div><div class="row">
    ${i>=0?`<button class="btn danger" onclick="cur().customBuffs.splice(${i},1);touch();closeModal();renderTab()">Delete</button>`:""}
    <button class="btn" onclick="saveCustomBuff(${i})">Save</button></div>`);}
@@ -2616,7 +2647,7 @@ function saveCustomBuff(i){const c=cur();
   const d20d=$("#cb_d20").value.trim();
   const b={name:$("#cb_name").value.trim()||"Buff",ic:"🔆",note:$("#cb_note").value.trim(),
     conc:$("#cb_conc").checked,fx:fxCollect(),
-    d20:d20d&&on.length?{on,dice:d20d}:null,dmgDice:$("#cb_dmg").value.trim()};
+    d20:d20d&&on.length?{on,dice:d20d}:null};
   i>=0?c.customBuffs[i]=b:c.customBuffs.push(b);
   touch();closeModal();renderTab();}
 /* ---- resistances / immunities / vulnerabilities ---- */
@@ -5256,6 +5287,48 @@ function runSelfTests(){
       const out=fxCollect();eq(JSON.stringify(out.map(e=>e.on||null)),'[{"k":"item","id":"sw"},{"k":"school","v":"evocation"},{"k":"ask","what":"armor"},null,{"k":"item","id":"gone"}]');
       box.innerHTML=fxRow(null,"item","self");eq(box.querySelector(".fxS").value,"self","new weapon rows default to this item");
     }finally{box.remove();}});
+  /* ---- dice damage effects & the dice buffs (Hex, Hunter's Mark, Divine Favor, Magic Weapon, Elemental Weapon) ---- */
+  const dz=(ed,more)=>tgt(x=>{x.edition=ed||"2014";if(more)more(x);});
+  t("Enlarge/Reduce still add ±1d4 to weapons only, now as dice effects",()=>{const c=dz("2014",x=>{x.activeBuffs=["Enlarge"];});
+    eq(JSON.stringify(attackDiceExtras(c,c.attacks[0]).map(b=>b.dice)),'["+1d4"]');eq(attackDiceExtras(c,c.attacks[2]).length,0,"not on spells");
+    ok(/1d8\+2 slashing \+ 1d4/.test(attackDmgLabel(c,c.attacks[0],true)));
+    ok(attackBreakdown(c,c.attacks[0]).dmg.some(r=>r[0]==="🦣 Enlarge"&&r[1]==="+1d4"),"named line");
+    c.activeBuffs=["Reduce"];ok(/− 1d4/.test(attackDmgLabel(c,c.attacks[0],true)),"minus shown");
+    eq(attackDmgExtra(c,c.attacks[0]),2,"dice never enter flat totals");});
+  t("Hex: +1d6 necrotic on weapon AND spell attacks",()=>{const c=dz("2014",x=>{x.activeBuffs=["Hex"];});
+    ok(/\+ 1d6 necrotic/.test(attackDmgLabel(c,c.attacks[0],true)),"weapon");ok(/\+ 1d6 necrotic/.test(attackDmgLabel(c,c.attacks[2],true)),"Fire Bolt");
+    ok(attackBreakdown(c,c.attacks[2]).dmg.some(r=>r[0]==="🕯️ Hex"&&r[1]==="+1d6 necrotic"));
+    ok(attackBuffIcons(c,c.attacks[2],"dmg").includes("🕯️"),"icon on the attack");});
+  t("Divine Favor and Hunter's Mark are weapon-only; types and concentration follow the edition",()=>{
+    const c=dz("2014",x=>{x.activeBuffs=["Divine Favor","Hunter's Mark"];});
+    eq(attackDiceExtras(c,c.attacks[2]).length,0,"no spell gets them");
+    eq(attackDiceExtras(c,c.attacks[0]).map(b=>b.dice+" "+b.t).join("|"),"+1d4 radiant|+1d6 ");
+    const c24=dz("2024",x=>{x.activeBuffs=["Hunter's Mark"];});eq(attackDiceExtras(c24,c24.attacks[0])[0].t,"force");
+    const df=BUFFS.find(b=>b.name==="Divine Favor");ok(buffConc(c,df),"2014: concentration");ok(!buffConc(c24,df),"2024: none");
+    toggleBuff("Magic Weapon");pickBuffTarget("Magic Weapon","weapon",0);eq(c24.concentration,null,"2024 Magic Weapon doesn't take concentration");});
+  t("Magic Weapon / Elemental Weapon only touch the weapon you pick",()=>{const c=dz("2014");
+    const keep=openModal;openModal=()=>{};
+    try{toggleBuff("Elemental Weapon");pickBuffTarget("Elemental Weapon","weapon",1);}finally{openModal=keep;}
+    eq(attackDiceExtras(c,c.attacks[1]).map(b=>b.dice).join(),"+1d4");eq(attackDiceExtras(c,c.attacks[0]).length,0);
+    eq(attackBonus(c,c.attacks[1])-attackBonus(c,c.attacks[0]),1);
+    ok(attackBreakdown(c,c.attacks[1]).dmg.some(r=>r[0]==="🔥 Elemental Weapon → Handaxe"));eq(c.concentration,"Elemental Weapon");});
+  t("dice are rolled once per hit (rays)",()=>{const c=dz("2014",x=>{x.activeBuffs=["Hex"];
+      x.attacks.push({name:"Magic Missile",kind:"spell",useCasting:true,spellLevel:1,autoHit:true,rays:3,dmgParts:[{d:"1d4+1",t:"force"}]});});
+    let tot=null;const kl=logRoll,kt=toast;logRoll=(n,v)=>{tot=v;};toast=()=>{};
+    try{for(let k=0;k<30;k++){rollAttackDamage(c.attacks.length-1);rng(tot,3*(2+1),3*(5+6),"3 × (1d4+1 + 1d6)");}}finally{logRoll=kl;toast=kt;}});
+  t("any-attack damage reaches spells; all-weapon damage still doesn't",()=>{const c=dz("2014",x=>{x.features.push({name:"Any",effects:[{t:"dmg.any",v:1}]},{name:"Weap",effects:[{t:"dmg.all",v:10}]});});
+    eq(attackDmgExtra(c,c.attacks[2]),1);eq(attackDmgExtra(c,c.attacks[0]),2+1+10);});
+  t("dice effects are sanitised; old custom-buff damage dice are converted",()=>{
+    const m=migrate({...newCharacter(),customBuffs:[{name:"Old",dmgDice:"1d6",fx:[]},{name:"Bad",dmgDice:"lots"}],
+      features:[{name:"F",effects:[{t:"ac",v:"1d4"},{t:"dmg.all",v:"1d6",dType:"Necrotic"},{t:"dmg.all",v:"1d6",dType:"banana"}]}]});
+    eq(JSON.stringify(m.customBuffs[0].fx),'[{"t":"dmg.all","v":"1d6"}]');eq(m.customBuffs[0].dmgDice,undefined);eq(m.customBuffs[1].fx.length,0);
+    eq(m.features[0].effects[0].v,0,"dice on AC: off");eq(m.features[0].effects[1].dType,"necrotic");eq(m.features[0].effects[2].dType,undefined);});
+  t("the effects editor keeps dice and their type, refuses dice where they can't work",()=>{tgt();
+    const box=document.createElement("div");box.id="fxList";box.style.display="none";document.body.appendChild(box);
+    const kt=toast;toast=()=>{};
+    try{box.innerHTML=fxRow({t:"dmg.any",v:"1d6",dType:"necrotic"},"buff")+fxRow({t:"ac",v:"1d4"},"buff")+fxRow({t:"dmg.all",v:"1d6+2"},"buff")+fxRow({t:"dmg.all",v:"-1d4"},"buff");
+      const out=fxCollect();eq(JSON.stringify(out),'[{"t":"dmg.any","v":"1d6","dType":"necrotic"},{"t":"dmg.all","v":"-1d4"}]');
+    }finally{box.remove();toast=kt;}});
   t("editing effects keeps fields the editor doesn't show (ability, damage types)",()=>{
     const box=document.createElement("div");box.id="fxList";box.style.display="none";document.body.appendChild(box);
     try{box.innerHTML=fxRow({t:"dmg.melee",v:"barbarian>=9?3:2",ab:"str",ed:"2014"})+fxRow({t:"dmg.spell",v:"cha",dt:["radiant","fire"]});
