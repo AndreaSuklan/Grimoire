@@ -54,6 +54,19 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.8 — The Celestial warlock, spell attacks
+
+- **☀️ The Celestial (Warlock, 2014 / Xanathar's) and Celestial Patron (2024) built in**: every feature at the right levels, written as summaries in our own words (paste your book's text via ✏️ if you prefer).
+  - **2014 spells**: Light and Sacred Flame are added as always prepared. The expanded spells (Cure Wounds, Guiding Bolt, Flaming Sphere…) are *not* free: they appear in the Warlock spell picker and in the SRD library's Warlock filter, tagged ☀️ patron. **2024**: the Celestial Spells are always prepared, added automatically up to your warlock level.
+  - **Healing Light**: the pool has 1 + warlock level d6s. Use opens a picker for 1 up to your Charisma modifier (minimum 1) dice. The app rolls them, and 💚 Heal me applies the total to you.
+  - **Radiant Soul**: you get radiant resistance automatically, and +Cha appears as its own line on radiant/fire **spell** damage (see below).
+  - **Celestial Resilience**: your temp HP (warlock level + Cha) arrive at the end of every short and long rest (2024: also when you Use Magical Cunning). If your current temp HP are higher, you keep those.
+  - **Searing Vengeance**: tapping 🎲 for a death save while it's ready offers it instead of the roll. It heals you to half your max HP, stands you up and rolls the 2d8 + Cha radiant burst. On 2024 characters, Use on the card covers an ally.
+- **Spell attacks**: on Main → Attacks, the type can now be **Spell**. A spell uses your spell attack bonus, or with *Resolved by* set to a save, shows your **save DC** instead of a to-hit. It gets spell bonuses (Spell attack rolls, Spell save DC, the new **Spell damage**) and never weapon ones (All weapon attack/damage, magic weapon, 🦣 Enlarge dice). ✨ Bless still helps spell attack rolls.
+- **Damage bonuses limited to damage types**: any damage effect can now say "only for radiant, fire…" (new optional field in the effects editor). The bonus counts only when the attack deals that type, and it is added to the matching damage row.
+- **Cantrips known no longer count always-prepared cantrips** (subclass bonus cantrips, racial cantrips).
+- **Fix**: saving a feature in the editor no longer drops hidden effect settings (such as Rage's "Strength attacks only").
+
 ### New in v1.7 — clearer attack numbers, roll your own Wild Surge
 
 - **Attack breakdown with To hit and Damage**: tap an attack's name on Main to see two sections, each bonus on its own named line (ability, proficiency, magic, every feature/item bonus and every active effect: flat bonuses like 😡 Rage, d20 dice like ✨ Bless or 😖 Bane, damage dice like 🦣 Enlarge, plus your custom buffs). Only what applies right now is listed, and there are 🎲 buttons for both rolls.

@@ -335,7 +335,7 @@ const EFFECT_GROUPS=[
  ["Combat",[["ac","Armor Class"],["init","Initiative"],["speed","Speed"],["hpmax","Max HP"],["passive","Passive senses"],
   ["atk.all","All weapon attack rolls"],["atk.melee","Melee attack rolls"],["atk.ranged","Ranged attack rolls"],
   ["dmg.all","All weapon damage"],["dmg.melee","Melee damage"],["dmg.ranged","Ranged damage"]]],
- ["Spellcasting",[["spell.dc","Spell save DC"],["spell.atk","Spell attack rolls"]]],
+ ["Spellcasting",[["spell.dc","Spell save DC"],["spell.atk","Spell attack rolls"],["dmg.spell","Spell damage (Spell attacks)"]]],
  ["Resistances & immunities",[...DMG_TYPES.map(t=>["resist."+t,"Resist "+t]),...DMG_TYPES.map(t=>["immune."+t,"Immune to "+t]),...DMG_TYPES.map(t=>["vuln."+t,"Vulnerable to "+t])]],
  ["Condition immunities",CONDITIONS.map(cd=>["condimm."+cd,"Immune: "+cd])],
  ["Custom defenses (type the text as value)",[["custom.resist","Custom resistance…"],["custom.immune","Custom immunity…"],["custom.vuln","Custom vulnerability…"]]]];
@@ -343,7 +343,13 @@ const EFFECT_LABELS=Object.fromEntries(EFFECT_GROUPS.flatMap(g=>g[1]));
 const isDefTarget=t=>/^(resist|immune|vuln|condimm)\./.test(t||"");
 const fxLabel=e=>{
   if(/^custom\./.test(e.t||""))return ({resist:"Resistant to",immune:"Immune to",vuln:"Vulnerable to"}[e.t.split(".")[1]]||"")+" “"+esc(String(e.v))+"”";
-  return esc(EFFECT_LABELS[e.t]||e.t)+(isDefTarget(e.t)?"":" "+esc(String(e.v)));};
+  return esc(EFFECT_LABELS[e.t]||e.t)+(isDefTarget(e.t)?"":" "+esc(String(e.v)))+dtLabel(e.dt);};
+/* Damage-type filter on an effect (e.g. Radiant Soul: only radiant or fire damage). Lower-case type names. */
+function normDt(v){const a=(Array.isArray(v)?v:String(v||"").split(/[^a-z]+/i)).map(x=>String(x).toLowerCase().trim()).filter(x=>DMG_TYPES.includes(x));
+  return a.length?[...new Set(a)]:null;}
+/* a malformed damage-type filter becomes [] (matches nothing) — never "no filter", which would apply it everywhere */
+function fxSanitize(e){if(e&&e.dt!==undefined)e.dt=normDt(e.dt)||[];}
+const dtLabel=dt=>dt&&dt.length?" ("+esc(dt.join("/"))+" only)":"";
 /* Auto-attached effects for well-known features (matched on feature name) */
 const KNOWN_EFFECTS=[
  {re:/aura of protection/i,e:[{t:"save.all",v:"max(1,cha)"}]},
@@ -405,12 +411,39 @@ const BUILTIN_SUBS=[
   {name:"Wild Surge",levels:[3],fx:[],kindHint:"passive",desc:"(Summary) Whenever you enter your rage, roll a d8 on the Wild Magic table and its effect happens at once. If the effect calls for a saving throw, the DC is 8 + your proficiency bonus + your Constitution modifier.\n\nWhen you rage (press Use on Rage, or turn on 😡 Rage in Active effects on Main) the app asks every time: roll the d8 in the app, or pick the result you rolled at the table. The effect shows in the strip at the top until the rage ends.\n\nWILD MAGIC TABLE (d8)\n1. Shadowy tendrils: each creature of your choice you can see within 30 ft makes a Con save or takes 1d12 necrotic damage. You gain 1d12 temporary HP.\n2. Teleport up to 30 ft to an unoccupied space you can see. Until the rage ends, you can do it again as a bonus action on each of your turns.\n3. An intangible spirit that looks like a flumph or a pixie (your choice) appears within 5 ft of a creature you can see within 30 ft. At the end of the current turn it explodes: each creature within 5 ft of it makes a Dex save or takes 1d6 force damage. Until the rage ends, you can summon another as a bonus action on each of your turns.\n4. One weapon you're holding is infused: until the rage ends its damage becomes force and it gains the light and thrown properties (range 20/60 ft). If it leaves your hand, it reappears there at the end of the current turn.\n5. Until the rage ends, any creature that hits you with an attack roll takes 1d6 force damage.\n6. Protective lights: until the rage ends you have +1 AC, and allies within 10 ft of you get the same bonus.\n7. Flowers and vines: until the rage ends, the ground within 15 ft of you is difficult terrain for your enemies.\n8. A bolt of light from your chest: another creature you can see within 30 ft makes a Con save or takes 1d6 radiant damage and is blinded until the start of your next turn. Until the rage ends, you can do it again as a bonus action on each of your turns."},
   {name:"Bolstering Magic",levels:[6],uses:"prof",recharge:"long",kindHint:"action",desc:"(Summary) Action: touch one creature (it can be you) and choose one benefit:\n• For 10 minutes, whenever it makes an attack roll or an ability check, it can roll a d3 and add the result to the d20.\n• Roll a d3: the creature regains one expended spell slot of that level or lower (its choice). A creature that receives this benefit can't receive it again until it finishes a long rest.\n\nUses: your proficiency bonus, all regained on a long rest."},
   {name:"Unstable Backlash",levels:[10],fx:[],kindHint:"reaction",desc:"(Summary) While raging, immediately after you take damage or fail a saving throw, you can use your reaction to roll on the Wild Magic table and produce that effect at once. It replaces your current Wild Magic effect.\n\nIn the app: when you take damage while raging, the damage pop-up offers 🌀 Unstable Backlash; you can also start it from the Wild Surge chip at the top. Either way you choose to roll in the app or pick the result you rolled."},
-  {name:"Controlled Surge",levels:[14],fx:[],kindHint:"passive",desc:"(Summary) Whenever you roll on the Wild Magic table, you can roll the die twice and choose which of the two effects to unleash. If both dice show the same number, you can ignore it and choose any effect on the table.\n\nFrom level 14, Roll for me rolls twice and lets you pick; if you roll at the table, just pick the effect you chose."}]}];
-/* Oath spells auto-added as always-prepared (all SRD spells; 2014 lists, reused for 2024) */
+  {name:"Controlled Surge",levels:[14],fx:[],kindHint:"passive",desc:"(Summary) Whenever you roll on the Wild Magic table, you can roll the die twice and choose which of the two effects to unleash. If both dice show the same number, you can ignore it and choose any effect on the table.\n\nFrom level 14, Roll for me rolls twice and lets you pick; if you roll at the table, just pick the effect you chose."}]},
+ /* The Celestial (Xanathar's Guide to Everything, 2014) and the Celestial Patron (PHB 2024). Summaries in our own words. */
+ {edition:"2014",class:"Warlock",name:"The Celestial",features:[
+  {name:"Expanded Spell List",levels:[1],fx:[],kindHint:"passive",desc:"(Summary) Your patron adds these spells to the warlock spell list for you. They are not free: you still choose them as spells known.\n1st: Cure Wounds, Guiding Bolt · 2nd: Flaming Sphere, Lesser Restoration · 3rd: Daylight, Revivify · 4th: Guardian of Faith, Wall of Fire · 5th: Flame Strike, Greater Restoration.\n\nIn the app they show up in the Warlock spell picker and when you filter the SRD library by Warlock, tagged ☀️ patron."},
+  {name:"Bonus Cantrips",levels:[1],fx:[],kindHint:"passive",desc:"(Summary) You learn the Light and Sacred Flame cantrips. They count as warlock cantrips but don't count against the number of cantrips you know.\n\nThey are added to your Spells tab automatically (as always prepared, outside the cantrip count) when the SRD library is downloaded."},
+  {name:"Healing Light",levels:[1],uses:"1+warlock",recharge:"long",kindHint:"bonus",desc:"(Summary) You have a pool of d6s equal to 1 + your warlock level. As a bonus action, you heal one creature you can see within 60 ft by spending dice from the pool: roll them and add them up. You can spend at most as many dice at once as your Charisma modifier (minimum one). The pool refills on a long rest.\n\nPress Use to choose how many dice to spend; the app rolls them and offers to apply the healing to you."},
+  {name:"Radiant Soul",levels:[6],fx:[{t:"resist.radiant",v:1},{t:"dmg.spell",v:"cha",dt:["radiant","fire"]}],kindHint:"passive",desc:"(Summary) You have resistance to radiant damage. When you cast a spell that deals radiant or fire damage, add your Charisma modifier to one radiant or fire damage roll of that spell against one of its targets.\n\nIn the app: add the spell on Main → Attacks with type Spell. If it deals radiant or fire damage, Radiant Soul appears as its own line in the Damage breakdown. Add it to one target only."},
+  {name:"Celestial Resilience",levels:[10],fx:[],kindHint:"passive",desc:"(Summary) Whenever you finish a short or long rest, you gain temporary hit points equal to your warlock level + your Charisma modifier. Choose up to five other creatures you can see: each gains temporary hit points equal to half your warlock level + your Charisma modifier.\n\nThe app gives you your share automatically at the end of each rest. It keeps your current temporary HP if that is higher, because temporary HP don't stack."},
+  {name:"Searing Vengeance",levels:[14],uses:1,recharge:"long",kindHint:"passive",desc:"(Summary) When you would make a death saving throw at the start of your turn, you can instead spring back up in a burst of radiant energy. You regain hit points equal to half your hit point maximum and can stand up if you choose. Each creature of your choice within 30 ft takes radiant damage equal to 2d8 + your Charisma modifier and is blinded until the end of the current turn. Once per long rest.\n\nIn the app: when you tap 🎲 for a death save and this is available, you are offered Searing Vengeance instead."}]},
+ {edition:"2024",class:"Warlock",name:"Celestial Patron",features:[
+  {name:"Celestial Spells",levels:[3],fx:[],kindHint:"passive",desc:"(Summary) These spells are always prepared for you and don't count against your prepared spells: Aid, Cure Wounds, Guiding Bolt, Lesser Restoration, Light, Sacred Flame (level 3) · Daylight, Revivify (5) · Guardian of Faith, Wall of Fire (7) · Greater Restoration, Summon Celestial (9).\n\nThey are added to your Spells tab automatically when the SRD library is downloaded (a spell missing from the library is skipped; add it with ＋ Custom)."},
+  {name:"Healing Light",levels:[3],uses:"1+warlock",recharge:"long",kindHint:"bonus",desc:"(Summary) You have a pool of d6s equal to 1 + your warlock level. As a bonus action, you heal yourself or one creature you can see within 60 ft by spending dice from the pool: roll them and add them up. You can spend at most as many dice at once as your Charisma modifier (minimum one). The pool refills on a long rest.\n\nPress Use to choose how many dice to spend; the app rolls them and offers to apply the healing to you."},
+  {name:"Radiant Soul",levels:[6],fx:[{t:"resist.radiant",v:1},{t:"dmg.spell",v:"cha",dt:["radiant","fire"]}],kindHint:"passive",desc:"(Summary) You have resistance to radiant damage. Once per turn, when a spell you cast deals radiant or fire damage, add your Charisma modifier to that spell's damage against one of its targets.\n\nIn the app: add the spell on Main → Attacks with type Spell. If it deals radiant or fire damage, Radiant Soul appears as its own line in the Damage breakdown. Once per turn, one target."},
+  {name:"Celestial Resilience",levels:[10],fx:[],kindHint:"passive",desc:"(Summary) Whenever you use Magical Cunning or finish a short or long rest, you gain temporary hit points equal to your warlock level + your Charisma modifier. Choose up to five other creatures you can see: each gains temporary hit points equal to half your warlock level + your Charisma modifier.\n\nThe app gives you your share automatically at the end of each rest and when you press Use on Magical Cunning. It keeps your current temporary HP if that is higher, because temporary HP don't stack."},
+  {name:"Searing Vengeance",levels:[14],uses:1,recharge:"long",kindHint:"passive",desc:"(Summary) When you or an ally within 60 ft of you is about to make a death saving throw, you can unleash radiant energy instead. That creature regains hit points equal to half its hit point maximum and can end the Prone condition on itself. Each creature of your choice within 30 ft of it takes radiant damage equal to 2d8 + your Charisma modifier and is blinded until the end of the current turn. Once per long rest.\n\nIn the app: when you tap 🎲 for your own death save and this is available, you are offered Searing Vengeance instead. For an ally, press Use on this card."}]}];
+/* Oath/domain/patron spells auto-added as always-prepared. "Class|sub" lists are 2014 and reused for 2024;
+   an "edition:Class|sub" key wins for that edition only (keys are looked up by subclassSpellTable). */
 const SUBCLASS_SPELLS={
+ "2014:Warlock|celestial":{1:["Light","Sacred Flame"]}, /* Bonus Cantrips — the expanded list is NOT free, see PATRON_EXPANDED */
+ "2024:Warlock|celestial":{3:["Aid","Cure Wounds","Guiding Bolt","Lesser Restoration","Light","Sacred Flame"],5:["Daylight","Revivify"],7:["Guardian of Faith","Wall of Fire"],9:["Greater Restoration","Summon Celestial"]},
  "Paladin|ancients":{3:["Ensnaring Strike","Speak with Animals"],5:["Misty Step","Moonbeam"],9:["Plant Growth","Protection from Energy"],13:["Ice Storm","Stoneskin"],17:["Commune with Nature","Tree Stride"]},
  "Paladin|devotion":{3:["Protection from Evil and Good","Sanctuary"],5:["Lesser Restoration","Zone of Truth"],9:["Beacon of Hope","Dispel Magic"],13:["Freedom of Movement","Guardian of Faith"],17:["Commune","Flame Strike"]},
  "Paladin|vengeance":{3:["Bane","Hunter's Mark"],5:["Hold Person","Misty Step"],9:["Haste","Protection from Energy"],13:["Banishment","Dimension Door"],17:["Hold Monster","Scrying"]}};
+function subclassSpellTable(ed,cls,sub){const k=cls+"|"+normSub(sub);return SUBCLASS_SPELLS[ed+":"+k]||SUBCLASS_SPELLS[k]||null;}
+/* 2014 warlock expanded spell lists: extra spells you MAY choose as warlock spells known (by spell level).
+   They are offered in the level-up picker and the SRD browser's Warlock filter — never added for free. */
+const PATRON_EXPANDED={
+ "2014:Warlock|celestial":{1:["Cure Wounds","Guiding Bolt"],2:["Flaming Sphere","Lesser Restoration"],3:["Daylight","Revivify"],4:["Guardian of Faith","Wall of Fire"],5:["Flame Strike","Greater Restoration"]}};
+function expandedSpellNames(c,cls){const out=new Set();if(!c)return out;
+  for(const k of c.classes||[]){if(k.name!==cls||!k.subclass)continue;
+    const t=PATRON_EXPANDED[(c.edition||"2014")+":"+k.name+"|"+normSub(k.subclass)];
+    if(t)Object.values(t).flat().forEach(n=>out.add(n.toLowerCase()));}
+  return out;}
 /* Races (2014 SRD): ability increases applied as automatic effects; traits become features. 2024: increases come from backgrounds, traits still apply. */
 const RACES=[
  {name:"Dwarf (Hill)",speed:25,asi:{con:2,wis:1},traits:[
@@ -875,10 +908,12 @@ function migrate(c){ /* upgrade older saves in place — must survive partial, o
       if(!f.grants.spells.length&&!f.grants.summons.length)delete f.grants;}
     if(f.uses&&!f.recharge)f.recharge="long";
     if(!f.effects)f.effects=autoEffects(f.name,f.desc);
+    if(Array.isArray(f.effects))f.effects.forEach(fxSanitize);
     if(f.slotCast===undefined&&detectSlotCast(f.desc))f.slotCast=true;});
   c.attacks.forEach(a=>{
     if(!a.dmgParts){a.dmgParts=a.damage?[{d:a.damage,t:a.type||""}]:[];delete a.damage;delete a.type;}
-    if(!a.kind)a.kind="melee";});
+    if(!["melee","ranged","spell"].includes(a.kind))a.kind="melee";
+    if(a.kind!=="spell"||!ABILITIES.includes(a.save))delete a.save;});
   /* Items need a stable id: attacks used to link by name, so the first rename or re-save
      orphaned the link. Backfill the id and re-point any attack that used the old key. */
   inv.items.forEach(it=>{
@@ -940,7 +975,7 @@ function activeEffects(c){
     if(e.when==="armored"&&!equippedArmor(c))return;
     if(e.when==="unarmored"&&equippedArmor(c))return;
     if(e.ed&&e.ed!==(c.edition||"2014"))return; /* edition-specific rule */
-    const o={src,t:e.t,v:e.v};if(e.ab)o.ab=e.ab;if(extra)Object.assign(o,extra);
+    const o={src,t:e.t,v:e.v};if(e.ab)o.ab=e.ab;if(e.dt)o.dt=e.dt;if(extra)Object.assign(o,extra);
     out.push(o);};
   (c.features||[]).forEach(f=>(f.effects||[]).forEach(e=>add(f.name,e)));
   ((c.inventory||{}).items||[]).forEach(it=>{if(itemActive(it))(it.effects||[]).forEach(e=>add(it.name,e));});
@@ -1175,16 +1210,19 @@ function concCheckModal(dmg){const c=cur();
     <button class="btn" onclick="closeModal();d20Roll('Concentration save (DC ${dc})',${saveMod(c,"con")})">🎲 Roll</button>
     <button class="btn danger" onclick="closeModal();dropConcentration()">Drop it</button>
     <button class="btn ghost" onclick="closeModal()">Kept it</button></div>`);}
-/* ctx = {ab} for one attack: effects tied to an ability (Rage: Strength) count only when the attack uses it */
+/* ctx = {ab, dt} for one attack: effects tied to an ability (Rage: Strength) count only when the attack uses it,
+   and effects tied to damage types (Radiant Soul: radiant/fire) only when the attack deals one of them. */
 function bonusDetail(c,target,ctx){
   const raw=target.startsWith("abl.");
   const [dom]=target.split(".");
   return activeEffects(c).filter(e=>{
     if(e.ab&&!(ctx&&ctx.ab===e.ab))return false;
+    if(e.dt&&!(ctx&&ctx.dt&&e.dt.some(x=>ctx.dt.includes(x))))return false;
     if(e.t===target)return true;
     const [d,k]=e.t.split(".");
+    if(target==="dmg.spell")return false; /* "All weapon damage" (dmg.all) is for weapons only */
     return d===dom&&k==="all"&&target!==dom+".all";})
-   .map(e=>({src:e.src,v:evalFormula(c,e.v,raw),buff:e.buff,ic:e.ic})).filter(b=>b.v);}
+   .map(e=>({src:e.src,v:evalFormula(c,e.v,raw),buff:e.buff,ic:e.ic,dt:e.dt})).filter(b=>b.v);}
 function bonusFor(c,target,ctx){return bonusDetail(c,target,ctx).reduce((s,b)=>s+b.v,0);}
 function abl(c,a){return c.abilities[a]+bonusFor(c,"abl."+a);}
 function amod(c,a){return mod(abl(c,a));}
@@ -1335,36 +1373,43 @@ function explainSpell(which){const c=cur();const ab=c.spellcasting.ability;
 /* Tap an attack: two sections, To hit and Damage, with every bonus on its own named line. Only what is
    active right now is listed (Rage shows only while raging and only for Strength attacks), so the totals
    here always match the numbers on Main and what the dice buttons roll. */
-function attackBreakdown(c,a){const ctx=atkCtx(a);const kind=a.kind||"melee";
+function attackBreakdown(c,a){const ctx=atkCtx(a);const spell=isSpellAtk(a);
   const hit=[];
-  if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
-  if(a.proficient)hit.push(["Proficiency",profBonus(c)]);
-  if(+a.bonusMisc)hit.push(["Misc",+a.bonusMisc]);
-  if(+a.magic)hit.push(["Magic weapon",+a.magic]);
-  bonusDetail(c,"atk."+kind,ctx).forEach(b=>hit.push([esc(b.src),b.v]));
-  const hitDice=buffD20Extras(c,"attack");
+  if(isSaveSpell(a)){ /* resolved by the target's saving throw: explain the DC instead of a to-hit */
+    hit.push(["Base",8],["Proficiency",profBonus(c)]);
+    if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
+    bonusDetail(c,"spell.dc").forEach(b=>hit.push([esc(b.src),b.v]));}
+  else{
+    if(ctx.ab)hit.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
+    if(a.proficient)hit.push(["Proficiency",profBonus(c)]);
+    if(+a.bonusMisc)hit.push(["Misc",+a.bonusMisc]);
+    if(+a.magic&&!spell)hit.push(["Magic weapon",+a.magic]);
+    bonusDetail(c,atkTarget(a),ctx).forEach(b=>hit.push([esc(b.src),b.v]));}
+  const hitDice=isSaveSpell(a)?[]:buffD20Extras(c,"attack");
   hitDice.forEach(b=>hit.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
   const dmg=[];
-  (a.dmgParts||[]).forEach((p,j)=>dmg.push([j===0?"Weapon dice":"Extra dice",p.d+(p.t?" "+p.t:"")]));
+  (a.dmgParts||[]).forEach((p,j)=>dmg.push([j===0?(spell?"Spell dice":"Weapon dice"):"Extra dice",p.d+(p.t?" "+p.t:"")]));
   if(a.addAbility&&ctx.ab)dmg.push([ABL_NAMES[ctx.ab]+" modifier",amod(c,ctx.ab)]);
-  if(+a.magic)dmg.push(["Magic weapon",+a.magic]);
-  bonusDetail(c,"dmg."+kind,ctx).forEach(b=>dmg.push([esc(b.src),b.v]));
-  buffDmgExtras(c).forEach(b=>dmg.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
-  return {hit,hitTotal:fmt(attackBonus(c,a))+hitDice.map(b=>b.dice.startsWith("-")?" "+b.dice:" +"+b.dice).join(""),
+  if(+a.magic&&!spell)dmg.push(["Magic weapon",+a.magic]);
+  bonusDetail(c,dmgTarget(a),ctx).forEach(b=>dmg.push([esc(b.src)+dtLabel(b.dt),b.v]));
+  attackDiceExtras(c,a).forEach(b=>dmg.push([esc(b.ic+" "+b.name),b.dice.startsWith("-")?b.dice:"+"+b.dice]));
+  return {hit,hitTotal:isSaveSpell(a)?attackHitLabel(c,a):fmt(attackBonus(c,a))+hitDice.map(b=>b.dice.startsWith("-")?" "+b.dice:" +"+b.dice).join(""),
+    hitTitle:isSaveSpell(a)?"🎯 Save DC":"🎯 To hit",
     dmg,dmgTotal:attackDmgLabel(c,a,true)||"—"};}
 function explainAttack(i){const c=cur();const a=c.attacks[i];const b=attackBreakdown(c,a);
   const sect=(title,rows,total)=>`<h3 style="margin:12px 0 4px">${title}</h3>${fxRows(rows)}
    <div class="skrow" style="border-top:2px solid var(--line)"><div class="nm"><b>Total</b></div><div class="md" style="cursor:default">${total}</div></div>`;
   const ws=surgeNow(c);
-  const rageNoStr=buffOn(c,"Rage")&&atkCtx(a).ab!=="str";
+  const rageNoStr=buffOn(c,"Rage")&&atkCtx(a).ab!=="str"&&!isSpellAtk(a);
   openModal(`<h2>${esc(a.name)} ${XBTN}</h2>
-   <div class="brk">${sect("🎯 To hit",b.hit,b.hitTotal)}
+   <div class="brk">${sect(b.hitTitle,b.hit,b.hitTotal)}
    ${sect("💥 Damage",b.dmg,b.dmgTotal)}</div>
    ${ws&&ws.n===4?`<p class="dim">🗡️ Wild Surge — infused weapon: if this is the weapon you infused, its damage type is force until the rage ends.</p>`:""}
    ${rageNoStr?`<p class="dim">😡 Rage adds no damage here: it only applies to attacks made with Strength.</p>`:""}
    ${a.mastery?`<p><b>⚔️ ${a.mastery} (mastery).</b> ${esc(MASTERIES[a.mastery]||"")}</p>`:""}
+   ${isSaveSpell(a)?`<p class="dim">Each target makes a ${ABL_NAMES[a.save]} saving throw against your DC — there is no attack roll.</p>`:""}
    <div class="row" style="margin-top:10px">
-    <button class="btn ghost" onclick="closeModal();rollAttackHit(${i})">🎲 Roll to hit</button>
+    ${isSaveSpell(a)?"":`<button class="btn ghost" onclick="closeModal();rollAttackHit(${i})">🎲 Roll to hit</button>`}
     ${(a.dmgParts||[]).length?`<button class="btn ghost" onclick="closeModal();rollAttackDamage(${i})">🎲 Roll damage</button>`:""}</div>
    <p class="dim" style="margin-top:10px">Bonuses come from features, feats, equipped items and active effects (Main). Only what applies right now is listed.</p>`);}
 function explainHP(){const c=cur();
@@ -1374,18 +1419,26 @@ function explainHP(){const c=cur();
    <div class="spacer"></div><label>Base max HP</label><input type="number" value="${+c.hp.max||1}" onchange="cur().hp.max=Math.max(1,+this.value||1);cur().hp.current=Math.min(cur().hp.current,maxHP(cur()));touch();renderTab()">`);}
 /* ---- effects editor (shared by features & items) ---- */
 function fxOptions(sel){return EFFECT_GROUPS.map(([g,list])=>`<optgroup label="${g}">${list.map(([t,l])=>`<option value="${t}" ${t===sel?"selected":""}>${l}</option>`).join("")}</optgroup>`).join("");}
-function fxRow(e){return `<div class="row fxrow" style="margin-bottom:6px">
-  <select class="fxT" style="flex:2">${fxOptions(e&&e.t)}</select>
-  <input class="fxV" style="flex:1" placeholder="1, prof, cha…" value="${esc(e&&e.v!=null?e.v:"")}">
-  <button class="iconbtn" style="flex:none" onclick="this.parentElement.remove()">✕</button></div>`;}
+/* Fields the editor has no input for (ab, ed, when…) ride along in data-x so saving a feature never strips them. */
+function fxRow(e){const {t,v,dt,...x}=e||{};const isDmg=/^dmg\./.test(t||"");
+  return `<div class="fxrow" style="margin-bottom:6px" data-x="${esc(JSON.stringify(x))}"><div class="row">
+  <select class="fxT" style="flex:2" onchange="const d=this.closest('.fxrow').querySelector('.fxD');d.style.display=/^dmg\./.test(this.value)?'':'none'">${fxOptions(t)}</select>
+  <input class="fxV" style="flex:1" placeholder="1, prof, cha…" value="${esc(v!=null?v:"")}">
+  <button class="iconbtn" style="flex:none" onclick="this.closest('.fxrow').remove()">✕</button></div>
+  <input class="fxD" style="margin-top:4px;${isDmg?"":"display:none"}" placeholder="only for damage types (optional): e.g. radiant, fire" value="${esc((dt||[]).join(", "))}"></div>`;}
 function fxEditor(effects){return `<label>Effects — automatic bonuses</label>
   <div id="fxList">${(effects||[]).map(fxRow).join("")}</div>
   <button class="btn ghost small" type="button" onclick="$('#fxList').insertAdjacentHTML('beforeend',fxRow())">＋ Add bonus</button>
   <div class="dim" style="margin-top:3px">Value: number or formula (<b>prof</b>, <b>level</b>, <b>str…cha</b>) — e.g. "1", "max(1,cha)". For resistances/immunities just pick the target — no value needed.</div>`;}
 function fxCollect(){return $$("#fxList .fxrow").map(r=>{
   const t=r.querySelector(".fxT").value,vr=r.querySelector(".fxV").value.trim();
-  if(!vr){if(isDefTarget(t))return {t,v:1};return null;}
-  return {t,v:/^-?\d+$/.test(vr)?+vr:vr};}).filter(Boolean);}
+  let x={};try{x=JSON.parse(r.dataset.x||"{}")||{};}catch(e){x={};}
+  if(!vr){if(isDefTarget(t))return {...x,t,v:1};return null;}
+  const e={...x,t,v:/^-?\d+$/.test(vr)?+vr:vr};
+  const dtTxt=/^dmg\./.test(t)?r.querySelector(".fxD").value.trim():"";
+  if(dtTxt){const dt=normDt(dtTxt);e.dt=dt||[]; /* nothing recognised: the bonus stays off rather than applying to everything */
+    if(!dt)toast("⚠️ No known damage type in “"+esc(dtTxt)+"” — that bonus won't apply until you fix it",4500);}
+  return e;}).filter(Boolean);}
 
 /* ================== NAVIGATION ================== */
 function showList(){db.currentId=null;save();
@@ -1549,7 +1602,7 @@ function duplicateChar(id){const c=db.characters.find(x=>x.id===id);if(!c)return
 function printSheet(){const c=cur();if(!c)return;
   const sk=SKILLS.map(([k,n,ab])=>`<tr><td>${c.skills[k]===2?"◉◉":c.skills[k]===1?"◉":"○"}</td><td>${n} <small>(${ab.toUpperCase()})</small></td><td><b>${fmt(skillMod(c,k))}</b></td></tr>`).join("");
   const sv=ABILITIES.map(a=>`<tr><td>${c.saveProf[a]?"◉":"○"}</td><td>${ABL_NAMES[a]}</td><td><b>${fmt(saveMod(c,a))}</b></td></tr>`).join("");
-  const atts=c.attacks.map(a=>`<tr><td>${esc(a.name)}</td><td>${fmt(attackBonus(c,a))}</td><td>${attackDmgLabel(c,a)}</td><td>${a.mastery||""}</td></tr>`).join("");
+  const atts=c.attacks.map(a=>`<tr><td>${esc(a.name)}</td><td>${attackHitLabel(c,a)}</td><td>${attackDmgLabel(c,a)}</td><td>${a.mastery||""}</td></tr>`).join("");
   const feats=c.features.map(f=>{const mx=maxUses(c,f);return `<li><b>${esc(f.name)}</b>${mx?` (${mx} uses/${f.recharge==="short"?"SR":"LR"})`:""}${f.cls?` <small>[${esc(f.cls)}]</small>`:""}</li>`;}).join("");
   const sp=c.spellcasting.spells.slice().sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name))
     .map(s=>`<li>${s.level===0?"C":s.level} — ${esc(s.name)}${s.always?" (always)":s.prepared?" ✓":""}${s.conc?" ©":""}</li>`).join("");
@@ -1670,7 +1723,7 @@ function addSubclassSpells(c){ /* oath/domain spells -> always prepared, from th
   const lib=spellsFor(c);if(!lib)return 0;let n=0;
   for(const k of c.classes){
     if(!k.subclass)continue;
-    const t=SUBCLASS_SPELLS[k.name+"|"+normSub(k.subclass)];
+    const t=subclassSpellTable(c.edition||"2014",k.name,k.subclass);
     if(!t)continue;
     for(const lv in t){
       if(+lv>k.level)continue;
@@ -1686,7 +1739,7 @@ function syncClassFeaturesUI(c,quiet){
   if(r.stale.length&&confirm(`Remove ${r.stale.length} class feature(s) that no longer match your class/level/edition?\n(${r.stale.map(f=>f.name).slice(0,6).join(", ")}${r.stale.length>6?"…":""})`)){
     c.features=c.features.filter(x=>!r.stale.includes(x));}
   touch();
-  if((r.added||r.spellsAdded)&&!quiet)toast("📜 "+(r.added?r.added+" class feature"+(r.added>1?"s":""):"")+(r.added&&r.spellsAdded?" + ":"")+(r.spellsAdded?r.spellsAdded+" oath/domain spell"+(r.spellsAdded>1?"s":"")+" (always prepared)":"")+" added");}
+  if((r.added||r.spellsAdded)&&!quiet)toast("📜 "+(r.added?r.added+" class feature"+(r.added>1?"s":""):"")+(r.added&&r.spellsAdded?" + ":"")+(r.spellsAdded?r.spellsAdded+" subclass spell"+(r.spellsAdded>1?"s":"")+" (always prepared)":"")+" added");}
 function applyClassBasics(c){ // saves, hit die, profs — from lib if present, else built-in tables
   const main=c.classes[0];if(!main)return;
   const base=findBaseClass(c.edition,main.name);
@@ -1941,9 +1994,9 @@ function renderMain(){const c=cur();const pb=profBonus(c);
       const hit=attackBonus(c,a);
       const am=ammoItem(c,a);
       return `<div class="li"><div class="li-head">
-        <div class="li-title" onclick="explainAttack(${i})" style="cursor:pointer">${esc(a.name)} <span class="tag">${a.kind==="ranged"?"ranged":"melee"}</span>${a.mastery?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="${esc(MASTERIES[a.mastery]||"")}">${a.mastery}</span>`:""}
+        <div class="li-title" onclick="explainAttack(${i})" style="cursor:pointer">${esc(a.name)} <span class="tag">${isSpellAtk(a)?"spell":a.kind==="ranged"?"ranged":"melee"}</span>${a.mastery?`<span class="tag" style="color:var(--accent2);border-color:var(--accent2)" title="${esc(MASTERIES[a.mastery]||"")}">${a.mastery}</span>`:""}
           <div class="li-sub">${attackDmgLabel(c,a)} ${a.notes?"· "+esc(a.notes):""}${am?` · 🏹 ${+am.qty||0} ${esc(am.name)}`:""}</div></div>
-        <button class="btn ghost small" onclick="rollAttackHit(${i})">${fmt(hit)}</button>
+        <button class="btn ghost small" onclick="rollAttackHit(${i})">${isSaveSpell(a)?attackHitLabel(c,a):fmt(hit)}</button>
         ${(a.dmgParts||[]).length?`<button class="btn ghost small" onclick="rollAttackDamage(${i})">DMG</button>`:""}
         <button class="iconbtn" onclick="editAttack(${i})">✏️</button>
       </div></div>`;}).join(""):'<div class="empty">No attacks yet — add manually or equip a weapon in Items</div>'}</div>
@@ -2111,6 +2164,7 @@ function compSave(i){const c=cur();
 function ammoItem(c,a){if(!a.ammoId)return null;
   return (c.inventory.items||[]).find(it=>(it.id||it.name)===a.ammoId)||null;}
 function rollAttackHit(i){const c=cur();const a=c.attacks[i];
+  if(isSaveSpell(a)){explainAttack(i);return;} /* nothing to roll: the targets save */
   const am=ammoItem(c,a);
   let note="";
   if(am){
@@ -2118,39 +2172,62 @@ function rollAttackHit(i){const c=cur();const a=c.attacks[i];
     am.qty=(+am.qty||0)-1;touch();renderTab();
     note="🏹 "+am.qty+" "+esc(am.name)+" left";}
   d20Roll(a.name+" attack",attackBonus(c,a),note);}
-/* The attack's own context: which ability it uses. Effects tied to an ability (Rage → Strength) read it. */
-function atkCtx(a){return {ab:a.ability&&a.ability!=="none"?a.ability:null};}
+/* The attack's own context: which ability it uses and which damage types it deals.
+   Effects tied to an ability (Rage → Strength) or to damage types (Radiant Soul → radiant/fire) read it. */
+function atkCtx(a){const dt=[...new Set((a.dmgParts||[]).flatMap(p=>normDt(p.t)||[]))];
+  return {ab:a.ability&&a.ability!=="none"?a.ability:null,dt};}
+/* Spell attacks (kind "spell") use the spellcasting pipeline: spell.atk / spell.dc / dmg.spell, never the weapon
+   bonuses (atk.*, dmg.all, magic weapon, weapon damage dice). a.save = ability → resolved by a saving throw. */
+const isSpellAtk=a=>!!a&&a.kind==="spell";
+const isSaveSpell=a=>isSpellAtk(a)&&ABILITIES.includes(a.save);
+const atkTarget=a=>isSpellAtk(a)?"spell.atk":"atk."+(a.kind||"melee");
+const dmgTarget=a=>isSpellAtk(a)?"dmg.spell":"dmg."+(a.kind||"melee");
 function attackBonus(c,a){let b=+a.bonusMisc||0;
   if(a.ability&&a.ability!=="none")b+=amod(c,a.ability);
   if(a.proficient)b+=profBonus(c);
-  b+=(+a.magic||0)+bonusFor(c,"atk."+(a.kind||"melee"),atkCtx(a));return b;}
-function attackDmgExtra(c,a){ /* flat bonus added to first damage part */
-  let x=(+a.magic||0)+bonusFor(c,"dmg."+(a.kind||"melee"),atkCtx(a));
-  if(a.addAbility&&a.ability&&a.ability!=="none")x+=amod(c,a.ability);
-  return x;}
+  b+=(isSpellAtk(a)?0:(+a.magic||0))+bonusFor(c,atkTarget(a),atkCtx(a));return b;}
+function attackSaveDC(c,a){const ab=a.ability&&a.ability!=="none"?amod(c,a.ability):0;
+  return 8+profBonus(c)+ab+bonusFor(c,"spell.dc");}
+function attackHitLabel(c,a){return isSaveSpell(a)?"DC "+attackSaveDC(c,a)+" "+a.save.toUpperCase():fmt(attackBonus(c,a));}
+function attackDiceExtras(c,a){return isSpellAtk(a)?[]:buffDmgExtras(c);} /* buff dice (Enlarge…) are weapon damage */
+/* Flat damage per damage part. Ordinary bonuses ride on the first part; a bonus limited to damage types
+   (Radiant Soul) rides on the first part of a matching type, so it is shown — and rolled — where it belongs. */
+function attackDmgFlats(c,a){const parts=a.dmgParts||[];const out=parts.map(()=>0);if(!parts.length)return out;
+  const ctx=atkCtx(a);
+  out[0]+=isSpellAtk(a)?0:(+a.magic||0);
+  if(a.addAbility&&ctx.ab)out[0]+=amod(c,ctx.ab);
+  bonusDetail(c,dmgTarget(a),ctx).forEach(b=>{
+    let j=0;if(b.dt){const k=parts.findIndex(p=>(normDt(p.t)||[]).some(x=>b.dt.includes(x)));if(k>=0)j=k;}
+    out[j]+=b.v;});
+  return out;}
+function attackDmgExtra(c,a){ /* total flat bonus across the damage parts */
+  if(!(a.dmgParts||[]).length){ /* no dice yet: still report the flat bonus (used by the breakdown tests) */
+    let x=(isSpellAtk(a)?0:(+a.magic||0))+bonusFor(c,dmgTarget(a),atkCtx(a));
+    if(a.addAbility&&a.ability&&a.ability!=="none")x+=amod(c,a.ability);return x;}
+  return attackDmgFlats(c,a).reduce((s,x)=>s+x,0);}
 /* Icons of the temporary effects (buffs) that are changing this attack right now, e.g. 😡 while raging. */
 function attackBuffIcons(c,a,which){
   const ics=[];const push=ic=>{if(ic&&!ics.includes(ic))ics.push(ic);};
-  if(which!=="dmg"){bonusDetail(c,"atk."+(a.kind||"melee"),atkCtx(a)).forEach(b=>b.buff&&push(b.ic));
+  if(which!=="dmg"&&!isSaveSpell(a)){bonusDetail(c,atkTarget(a),atkCtx(a)).forEach(b=>b.buff&&push(b.ic));
     buffD20Extras(c,"attack").forEach(b=>push(b.ic));}
-  if(which!=="hit"){bonusDetail(c,"dmg."+(a.kind||"melee"),atkCtx(a)).forEach(b=>b.buff&&push(b.ic));
-    buffDmgExtras(c).forEach(b=>push(b.ic));}
+  if(which!=="hit"){bonusDetail(c,dmgTarget(a),atkCtx(a)).forEach(b=>b.buff&&push(b.ic));
+    attackDiceExtras(c,a).forEach(b=>push(b.ic));}
   return ics;}
 function attackDmgLabel(c,a,noIcons){const parts=a.dmgParts||[];if(!parts.length)return "";
-  const x=attackDmgExtra(c,a);
-  const txt=parts.map((p,j)=>esc(p.d)+(j===0&&x?fmt(x):"")+(p.t?" "+esc(p.t):""))
-    .concat(buffDmgExtras(c).map(b=>esc(b.dice).replace(/^\+/,"").replace(/^-/,"− ")))
+  const fl=attackDmgFlats(c,a);
+  const txt=parts.map((p,j)=>esc(p.d)+(fl[j]?fmt(fl[j]):"")+(p.t?" "+esc(p.t):""))
+    .concat(attackDiceExtras(c,a).map(b=>esc(b.dice).replace(/^\+/,"").replace(/^-/,"− ")))
     .join(" + ").replace(/\+ − /g,"− ");
   const ics=noIcons?[]:attackBuffIcons(c,a,"dmg");
   return txt+(ics.length?` <span title="includes temporary effects — tap the attack for the breakdown">${ics.join("")}</span>`:"");}
 function rollAttackDamage(i){const c=cur();const a=c.attacks[i];
   const parts=a.dmgParts||[];if(!parts.length){toast("No damage set");return;}
-  let total=0;const lines=[];
+  let total=0;const lines=[];const fl=attackDmgFlats(c,a);
   parts.forEach((p,j)=>{const r=rollExpr(p.d)||{total:0,detail:"?"};
-    const extra=j===0?attackDmgExtra(c,a):0;
+    const extra=fl[j]||0;
     const t=r.total+extra;total+=t;
     lines.push(`<div><b>${t}</b> ${esc(p.t||"damage")} <span class="dim">${esc(r.detail)}${extra?" "+fmt(extra):""}</span></div>`);});
-  buffDmgExtras(c).forEach(b=>{const r=rollExpr(b.dice);
+  attackDiceExtras(c,a).forEach(b=>{const r=rollExpr(b.dice);
     if(r){total+=r.total;lines.push(`<div><b>${r.total}</b> <span class="dim">${b.ic} ${esc(b.name)} ${esc(b.dice)}</span></div>`);}});
   logRoll(a.name+" damage",total);
   toast(`<div><b>${esc(a.name)} damage</b></div>`+bigHtml(total)+lines.join(""),6000);}
@@ -2287,7 +2364,14 @@ function setDeath(k,i){const c=cur();c.deathSaves[k]=c.deathSaves[k]===i?i-1:i;t
 /* Death saves: the app rolls and reads the result, but you tap to record it —
    the dots stay yours to correct. */
 function deathSavePenalty(c){return c.edition==="2024"?-2*Math.max(0,+c.exhaustion||0):0;}
-function rollDeathSave(){const c=cur();if(!c)return;
+function rollDeathSave(skipOffer){const c=cur();if(!c)return;
+  const sv=!skipOffer&&c.hp.current<=0&&searingVengeanceReady(c);
+  if(sv){const i=c.features.indexOf(sv);
+    openModal(`<h2>Death save ${XBTN}</h2>
+     <p>☀️ <b>Searing Vengeance</b> is ready: instead of rolling, spring back up with half your HP and blast nearby foes with radiant light.</p>
+     <div class="row"><button class="btn" onclick="closeModal();searingVengeance(${i})">☀️ Searing Vengeance</button>
+      <button class="btn ghost" onclick="closeModal();rollDeathSave(true)">🎲 Roll the death save</button></div>`);
+    return;}
   const pen=deathSavePenalty(c);
   const r=rollDie(20),total=r+pen;
   let outcome,act;
@@ -2434,7 +2518,8 @@ function shortRest(){const c=cur();
     if(f.recharge==="short"){f.usesLeft=mx;n++;}
     else if(f.recharge==="short1"&&(f.usesLeft??mx)<mx){f.usesLeft=Math.min(mx,(f.usesLeft??mx)+1);n++;}});
   c.spellcasting.spells.forEach(s=>{if(s.uses&&s.recharge==="short"&&(s.usesLeft??s.uses)<s.uses){s.usesLeft=+s.uses;n++;}});
-  touch();renderTab();toast("🌙 Short rest — pact slots"+(n?" and "+n+" feature"+(n>1?"s":""):"")+" restored. Spend hit dice to heal.");}
+  const cr=celestialResilience(c);
+  touch();renderTab();toast("🌙 Short rest — pact slots"+(n?" and "+n+" feature"+(n>1?"s":""):"")+" restored. Spend hit dice to heal."+(cr?" ☀️ "+cr+" temp HP (Celestial Resilience).":""));}
 function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and half your hit dice."))return;
   const c=cur();c.hp.current=maxHP(c);c.hp.temp=0;
   for(let l=1;l<=9;l++)c.spellcasting.slots[l].used=0;
@@ -2445,7 +2530,8 @@ function longRest(){if(!confirm("Take a long rest? Restores HP, spell slots and 
   c.spellcasting.spells.forEach(s=>{if(s.uses)s.usesLeft=+s.uses;}); /* incl. 🌅 dawn & 🌙 */
   c.activeBuffs=[];c.concentration=null;c.wildSurge=null; /* temporary effects end */
   const gone=dismissConcSummons(c);
-  touch();renderTab();toast("☀️ Long rest complete!"+(gone?" ("+gone+" summon"+(gone>1?"s":"")+" dismissed)":""));}
+  const cr=celestialResilience(c); /* after temp HP reset: the rest ends, then the patron's gift arrives */
+  touch();renderTab();toast("☀️ Long rest complete!"+(gone?" ("+gone+" summon"+(gone>1?"s":"")+" dismissed)":"")+(cr?" ☀️ "+cr+" temp HP (Celestial Resilience).":""));}
 function dmgPartRow(p){return `<div class="row dmgpart" style="margin-bottom:6px">
   <input class="dpD" placeholder="1d8 or 2d6+1" value="${esc(p&&p.d||"")}">
   <input class="dpT" placeholder="type (slashing, fire…)" value="${esc(p&&p.t||"")}">
@@ -2455,14 +2541,17 @@ function editAttack(i){const c=cur();const a=i>=0?c.attacks[i]:{name:"",ability:
    <label>Name</label><input id="atkName" value="${esc(a.name)}"><div class="spacer"></div>
    <div class="grid3">
     <div><label>Ability</label><select id="atkAb"><option value="none" ${a.ability==="none"?"selected":""}>None</option>${ABILITIES.map(x=>`<option value="${x}" ${a.ability===x?"selected":""}>${ABL_NAMES[x]}</option>`).join("")}</select></div>
-    <div><label>Type</label><select id="atkKind"><option value="melee" ${a.kind!=="ranged"?"selected":""}>Melee</option><option value="ranged" ${a.kind==="ranged"?"selected":""}>Ranged</option></select></div>
-    <div><label>Magic (+N)</label><input id="atkMagic" type="number" value="${a.magic||0}"></div></div>
+    <div><label>Type</label><select id="atkKind" onchange="atkKindChanged(${i})"><option value="melee" ${a.kind!=="ranged"&&a.kind!=="spell"?"selected":""}>Melee</option><option value="ranged" ${a.kind==="ranged"?"selected":""}>Ranged</option><option value="spell" ${a.kind==="spell"?"selected":""}>Spell</option></select></div>
+    <div class="atkWeaponOnly"><label>Magic (+N)</label><input id="atkMagic" type="number" value="${a.magic||0}"></div></div>
+   <div class="atkSpellOnly" style="margin-top:8px"><label>Resolved by</label><select id="atkSave">
+     <option value="">Spell attack roll</option>${ABILITIES.map(x=>`<option value="${x}" ${a.save===x?"selected":""}>${ABL_NAMES[x]} saving throw (uses your spell save DC)</option>`).join("")}</select>
+     <div class="dim" style="margin-top:3px">Spells use your spell attack bonus or save DC and get spell bonuses (e.g. Radiant Soul on radiant/fire damage) — not weapon bonuses.</div></div>
    <div class="spacer"></div>
    <div class="grid2">
     <div><label>Misc to-hit bonus</label><input id="atkMisc" type="number" value="${a.bonusMisc||0}"></div>
-    <div><label>Mastery (2024)</label><select id="atkMastery"><option value="">None</option>${Object.keys(MASTERIES).map(m=>`<option ${a.mastery===m?"selected":""}>${m}</option>`).join("")}</select></div></div>
+    <div class="atkWeaponOnly"><label>Mastery (2024)</label><select id="atkMastery"><option value="">None</option>${Object.keys(MASTERIES).map(m=>`<option ${a.mastery===m?"selected":""}>${m}</option>`).join("")}</select></div></div>
    <div class="spacer"></div>
-   <div class="grid2">
+   <div class="grid2 atkWeaponOnly">
     <div><label>Ammunition (auto −1 per attack)</label><select id="atkAmmo">
       <option value="">None</option>
       ${(c.inventory.items||[]).filter(it=>it.cat==="Ammo").map(it=>`<option value="${esc(it.id||it.name)}" ${a.ammoId===(it.id||it.name)?"selected":""}>${esc(it.name)} (×${+it.qty||0})</option>`).join("")}</select></div></div>
@@ -2477,13 +2566,24 @@ function editAttack(i){const c=cur();const a=i>=0?c.attacks[i]:{name:"",ability:
    <div class="spacer"></div><label>Notes</label><input id="atkNotes" value="${esc(a.notes||"")}">
    <div class="spacer"></div><div class="row">
    ${i>=0?`<button class="btn danger" onclick="cur().attacks.splice(${i},1);touch();closeModal();renderTab()">Delete</button>`:""}
-   <button class="btn" onclick="saveAttack(${i})">Save</button></div>`);}
+   <button class="btn" onclick="saveAttack(${i})">Save</button></div>`);
+  atkKindShow();}
+/* Show the fields that make sense for the chosen attack type (weapons: magic, ammo, mastery; spells: attack or save). */
+function atkKindShow(){const sp=($("#atkKind")||{}).value==="spell";
+  $$(".atkSpellOnly").forEach(e=>e.style.display=sp?"":"none");
+  $$(".atkWeaponOnly").forEach(e=>e.style.display=sp?"none":"");}
+function atkKindChanged(i){atkKindShow();const c=cur();
+  if(i<0&&$("#atkKind").value==="spell"){ /* sensible defaults for a new spell: casting ability, no ability mod on damage */
+    $("#atkAb").value=c.spellcasting.ability||"cha";$("#atkProf").checked=true;$("#atkAddAb").checked=false;}}
 function saveAttack(i){const c=cur();
   const parts=$$("#dmgParts .dmgpart").map(r=>({d:r.querySelector(".dpD").value.trim(),t:r.querySelector(".dpT").value.trim()})).filter(p=>p.d);
   const a={name:$("#atkName").value.trim()||"Attack",ability:$("#atkAb").value,proficient:$("#atkProf").checked,
     kind:$("#atkKind").value,magic:+$("#atkMagic").value||0,addAbility:$("#atkAddAb").checked,
     bonusMisc:+$("#atkMisc").value||0,dmgParts:parts,notes:$("#atkNotes").value.trim(),
     ammoId:$("#atkAmmo").value||undefined,mastery:$("#atkMastery").value||undefined};
+  if(a.kind==="spell"){ /* weapon-only fields don't apply to spells */
+    a.magic=0;delete a.ammoId;delete a.mastery;
+    const sv=$("#atkSave").value;if(ABILITIES.includes(sv))a.save=sv;}
   if(i>=0&&c.attacks[i].itemId)a.itemId=c.attacks[i].itemId;
   i>=0?c.attacks[i]=a:c.attacks.push(a);touch();closeModal();renderTab();}
 /* ================== SKILLS TAB ================== */
@@ -2660,7 +2760,7 @@ function preparedInfo(c){
   const sc=c.spellcasting;
   const known=sc.spells.filter(s=>s.level>0&&!s.always&&!s.fromItem).length;
   const prep=sc.spells.filter(s=>s.level>0&&!s.always&&!s.fromItem&&s.prepared).length;
-  const cant=sc.spells.filter(s=>s.level===0&&!s.fromItem).length;
+  const cant=sc.spells.filter(s=>s.level===0&&!s.fromItem&&!s.always).length; /* bonus cantrips (always) don't count */
   const rows=ks.map(([k,cap])=>`${esc(k.name)} — ${cap.mode==="known"?"known":"prepared"} <b>${cap.mode==="known"?known:prep}/${cap.spells}</b>`
     +(cap.cantrips?` · cantrips <b>${cant}/${cap.cantrips}</b>`:""));
   /* spells aren't tagged with the class that granted them, so in a multiclass build each
@@ -2713,15 +2813,16 @@ function spellPickModal(cls,dS,dC,mode){const c=cur();
 function renderSpellPick(){const c=cur();const cls=$("#spkList").dataset.cls;
   const mx=Math.max(1,maxSlotLv(c));const q=spQ.toLowerCase();
   const known=new Set(c.spellcasting.spells.map(s=>s.name));
+  const exp=expandedSpellNames(c,cls);
   const list=(spellsFor(c)||[]).filter(s=>
     s.level<=mx&&!known.has(s.name)&&
-    (s.classes||[]).some(x=>x.includes(cls))&&
+    ((s.classes||[]).some(x=>x.includes(cls))||exp.has(s.name.toLowerCase()))&&
     (spLvF==="all"||s.level===+spLvF)&&
     (!q||s.name.toLowerCase().includes(q)))
    .sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name)).slice(0,200);
   $("#spkList").innerHTML=list.map(s=>`<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;text-transform:none;font-size:15px;color:var(--txt);border-bottom:1px solid var(--line)">
     <input type="checkbox" class="spkBox" value="${esc(s.name)}" onchange="$('#spkCnt').textContent=$$('.spkBox').filter(b=>b.checked).length">
-    <span style="flex:1">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}</span>
+    <span style="flex:1">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}${exp.has(s.name.toLowerCase())?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">☀️ patron</span>':""}</span>
     <span class="dim">${s.level===0?"cantrip":"lv "+s.level}</span></label>`).join("")||'<div class="empty">No matches</div>';}
 function applySpellPick(){const c=cur();
   const names=$$(".spkBox").filter(b=>b.checked).map(b=>b.value);
@@ -3203,13 +3304,65 @@ function deleteFeature(i){const c=cur();const f=c.features[i];if(!f)return;
     c.companions=c.companions.filter(x=>x.src!==f.name);
   touch();closeModal();renderTab();}
 function useFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
+  if(isFeat(f,/^healing light$/i)&&mx>0){healingLightModal(i);return;}
+  if(isFeat(f,/^searing vengeance$/i)&&mx>0){searingVengeance(i);return;}
   const isRage=f===rageFeature(c);
   if(isRage&&buffOn(c,"Rage")){toast("Already raging — turn 😡 Rage off in Active effects (Main) to end it");return;}
   if(f.usesLeft===undefined)f.usesLeft=mx;
   if(f.usesLeft<=0){toast("No uses left — "+(f.recharge==="short"?"short or long":"long")+" rest to recover");return;}
   f.usesLeft--;
   if(isRage){toggleBuff("Rage",{spent:true});return;} /* the use is spent: also start the rage (and its Wild Surge) */
-  touch();renderTab();toast(esc(f.name)+": "+f.usesLeft+"/"+mx+" left");}
+  const cr=/^magical cunning$/i.test(String(f.name||"").trim())?celestialResilience(c):0; /* 2024: Magical Cunning also triggers it */
+  touch();renderTab();toast(esc(f.name)+": "+f.usesLeft+"/"+mx+" left"+(cr?" · ☀️ "+cr+" temp HP (Celestial Resilience)":""));}
+/* ---- The Celestial / Celestial Patron (warlock) ---- */
+function isFeat(f,re){return !!f&&re.test(String(f.name||"").trim());}
+function classLv(c,name){return ((c.classes||[]).find(k=>k.name===name)||{}).level||0;}
+function celestialFeat(c,re){return (c.features||[]).find(f=>f.cls==="Warlock"&&isFeat(f,re))||null;}
+/* Healing Light: one Use spends 1..cap dice, where cap = Cha modifier (min 1) and never more than the pool has left */
+function healingLightCap(c,f){const mx=maxUses(c,f);const left=f.usesLeft??mx;
+  return Math.max(0,Math.min(left,Math.max(1,amod(c,"cha"))));}
+function healingLightModal(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);const left=f.usesLeft??mx;
+  if(left<=0){toast("No Healing Light dice left — long rest to refill the pool");return;}
+  const cap=healingLightCap(c,f);
+  openModal(`<h2>☀️ Healing Light ${XBTN}</h2>
+   <p>Pool: <b>${left}/${mx}</b> d6 left. Spend up to <b>${cap}</b> at once (Charisma modifier, minimum 1).</p>
+   <p class="dim">Bonus action: heal one creature you can see within 60 ft. How many dice?</p>
+   <div class="row" style="flex-wrap:wrap">${Array.from({length:cap},(_,k)=>`<button class="btn" onclick="closeModal();healingLightRoll(${i},${k+1})">${k+1}d6</button>`).join("")}</div>`);}
+function healingLightRoll(i,n){const c=cur();const f=c.features[i];if(!f)return 0;
+  n=Math.floor(+n);const cap=healingLightCap(c,f);
+  if(!(n>=1&&n<=cap)){toast("You can spend 1–"+cap+" dice right now");return 0;}
+  const mx=maxUses(c,f);f.usesLeft=(f.usesLeft??mx)-n;
+  const r=rollExpr(n+"d6")||{total:0,detail:"?"};
+  logRoll("Healing Light ("+n+"d6)",r.total,r.detail);
+  touch();renderTab();
+  toast(`<div><b>☀️ Healing Light</b></div>${bigHtml(r.total)}
+    <div class="dim">${esc(r.detail)} · ${f.usesLeft}/${mx} dice left</div>
+    <div class="dice-adv"><button class="pill on" onclick="applyHealing(${r.total});toast('💚 You regain ${r.total} HP')">💚 Heal me</button>
+      <button class="pill" onclick="toast('Healing given to someone else')">Someone else</button></div>`,9000);
+  return r.total;}
+/* Celestial Resilience: temp HP = warlock level + Cha mod. Temp HP don't stack — keep the higher. Returns what you now get (0 = nothing changed). */
+function celestialResilience(c){if(!celestialFeat(c,/^celestial resilience$/i))return 0;
+  const v=classLv(c,"Warlock")+amod(c,"cha");
+  if(v<=0||v<=(+c.hp.temp||0))return 0;
+  c.hp.temp=v;return v;}
+/* Searing Vengeance: instead of a death save (2014: your own; 2024: yours or an ally's within 60 ft) */
+function searingVengeanceReady(c){const f=celestialFeat(c,/^searing vengeance$/i);
+  return f&&maxUses(c,f)>0&&(f.usesLeft??maxUses(c,f))>0?f:null;}
+function searingVengeance(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
+  if((f.usesLeft??mx)<=0){toast("Searing Vengeance is spent — long rest to recover it");return;}
+  const self=c.hp.current<=0;
+  if(!self&&c.edition!=="2024"){toast("Searing Vengeance works only when you are making a death save (at 0 HP)");return;}
+  f.usesLeft=(f.usesLeft??mx)-1;
+  let healTxt;
+  if(self){const heal=Math.floor(maxHP(c)/2);applyHealing(heal);c.deathSaves={s:0,f:0};
+    c.conditions=(c.conditions||[]).filter(x=>x!=="Unconscious"&&x!=="Prone");
+    healTxt=`You regain <b>${heal}</b> HP (half your max) and stand up — tap Prone on Main if you stay down.`;}
+  else healTxt="Your ally regains hit points equal to half <i>their</i> hit point maximum and can end Prone.";
+  const r=rollExpr("2d8")||{total:0,detail:"?"};const cha=amod(c,"cha");const dmg=Math.max(0,r.total+cha);
+  logRoll("Searing Vengeance (radiant)",dmg,r.detail+" "+fmt(cha));
+  touch();renderTab();
+  toast(`<div><b>☀️ Searing Vengeance</b></div><div>${healTxt}</div>${bigHtml(dmg)}
+    <div class="dim">2d8 ${esc(r.detail)} ${fmt(cha)} Cha — radiant damage to each creature of your choice within 30 ft; they are blinded until the end of this turn.</div>`,10000);}
 function undoFeature(i){const c=cur();const f=c.features[i];const mx=maxUses(c,f);
   if((f.usesLeft??mx)>=mx){toast("Already at full uses");return;}
   f.usesLeft=Math.min(mx,(f.usesLeft??mx)+1);
@@ -3604,9 +3757,10 @@ function openSpellBrowser(){
    <div id="spResults"></div>`);
   renderSpellResults();}
 function renderSpellResults(){const q=browserFilter.q.toLowerCase();
+  const exp=browserFilter.cls==="all"?new Set():expandedSpellNames(cur(),browserFilter.cls);
   const list=(spellsFor(cur())||[]).filter(s=>
     (browserFilter.lv==="all"||s.level===+browserFilter.lv)&&
-    (browserFilter.cls==="all"||s.classes.some(c=>c.includes(browserFilter.cls)))&&
+    (browserFilter.cls==="all"||s.classes.some(c=>c.includes(browserFilter.cls))||exp.has(s.name.toLowerCase()))&&
     (!q||s.name.toLowerCase().includes(q)))
     .sort((a,b)=>a.level-b.level||a.name.localeCompare(b.name));
   let html=`<div class="dim" style="margin:2px 0 4px">${list.length} spell${list.length===1?"":"s"}</div>`,lastLv=-1;
@@ -3616,7 +3770,7 @@ function renderSpellResults(){const q=browserFilter.q.toLowerCase();
       html+=`<div class="dim" style="margin:12px 0 6px;font-weight:700;letter-spacing:.05em">${s.level===0?"CANTRIPS":"LEVEL "+s.level}</div>`;}
     html+=`<div class="li">
     <div class="li-head" onclick="this.parentElement.classList.toggle('open')">
-      <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}
+      <div class="li-title">${esc(s.name)} ${s.conc?'<span class="tag c">C</span>':""}${s.ritual?'<span class="tag r">R</span>':""}${exp.has(s.name.toLowerCase())?'<span class="tag" style="color:var(--gold);border-color:var(--gold)">☀️ patron</span>':""}
         <div class="li-sub">${s.level===0?"Cantrip":"Level "+s.level} · ${esc(s.school)}</div></div>
       <button class="btn small" onclick="event.stopPropagation();addSrdSpell('${jstr(s.name)}')">Add</button></div>
     <div class="li-body"><div class="dim">${esc(s.time)} · ${esc(s.range)} · ${esc(s.components)} · ${esc(s.duration)}<br>${esc(s.classes.join(", "))}</div>
@@ -4535,6 +4689,107 @@ function runSelfTests(){
     pickSurge(2,"rage");pickSurge(8,"backlash");eq(surgeNow(c).n,8);});
   t("Controlled Surge at the table: any effect can be picked",()=>{const c=wildBarb(14);toggleBuff("Rage");
     pickSurge(1);eq(surgeNow(c).n,1);});
+
+  /* ---- The Celestial (2014) / Celestial Patron (2024) ---- */
+  const celWar=(lv,ed,more)=>mk(x=>{x.edition=ed||"2014";x.classes=[{name:"Warlock",subclass:ed==="2024"?"Celestial Patron":"The Celestial",level:lv}];
+    x.abilities.cha=16;x.spellcasting.ability="cha";x.hp={max:40,current:40,temp:0};if(more)more(x);
+    for(const f of expectedClassFeatures(x).values()){const au=classUses(x,f.cls,f.name,f.desc,f.uses,f.recharge);
+      x.features.push({name:f.name,desc:f.desc,uses:au.uses,recharge:au.recharge,source:"class",fid:f.fid,cls:f.cls,minLv:f.minLv,kind:f.kindHint,effects:JSON.parse(JSON.stringify(f.fx||[]))});}});
+  const feat=(c,n)=>c.features.findIndex(f=>f.name===n);
+  const spellAtk=(name,parts,more)=>Object.assign({name,ability:"cha",proficient:true,kind:"spell",magic:0,addAbility:false,bonusMisc:0,dmgParts:parts},more||{});
+  t("The Celestial (2014) is built in at levels 1/6/10/14",()=>{const c=celWar(14);
+    eq(c.features.filter(f=>f.cls==="Warlock").map(f=>f.name+"@"+f.minLv).join(),"Expanded Spell List@1,Bonus Cantrips@1,Healing Light@1,Radiant Soul@6,Celestial Resilience@10,Searing Vengeance@14");
+    ok(!c.features.some(f=>f.ph),"no paste-your-text placeholders");});
+  t("Celestial Patron (2024) is built in at levels 3/6/10/14",()=>{const c=celWar(14,"2024");
+    eq(c.features.filter(f=>f.cls==="Warlock").map(f=>f.name+"@"+f.minLv).join(),"Celestial Spells@3,Healing Light@3,Radiant Soul@6,Celestial Resilience@10,Searing Vengeance@14");
+    eq(celWar(2,"2024").features.filter(f=>f.cls==="Warlock").length,0,"nothing before level 3");});
+  t("Healing Light pool = 1 + warlock level (not character level)",()=>{
+    const c=celWar(5,"2014",x=>{x.classes.push({name:"Fighter",subclass:"",level:3});});
+    const f=c.features[feat(c,"Healing Light")];eq(maxUses(c,f),6);eq(f.recharge,"long");});
+  t("Healing Light spends 1..Cha-mod dice, never more than the pool has",()=>{const c=celWar(1);const i=feat(c,"Healing Light");const f=c.features[i];
+    eq(maxUses(c,f),2);eq(healingLightCap(c,f),2,"Cha 16 → 3, but only 2 dice in the pool");
+    eq(healingLightRoll(i,3),0,"over the cap is refused");eq(f.usesLeft??2,2,"nothing spent");
+    eq(healingLightRoll(i,0),0);eq(healingLightRoll(i,"x"),0);
+    rng(healingLightRoll(i,1),1,6);eq(f.usesLeft,1);eq(healingLightCap(c,f),1);
+    c.abilities.cha=8;f.usesLeft=2;eq(healingLightCap(c,f),1,"negative Cha still allows one die");});
+  t("Healing Light's Use opens the dice picker instead of spending one use",()=>{const c=celWar(5);const i=feat(c,"Healing Light");
+    let shown="";const keep=openModal;openModal=h=>{shown=h;};
+    try{useFeature(i);}finally{openModal=keep;}
+    ok(/1d6/.test(shown)&&/3d6/.test(shown)&&!/4d6/.test(shown),"1–3 dice offered (Cha +3)");eq(c.features[i].usesLeft??6,6);});
+  t("Radiant Soul: radiant resistance and +Cha on radiant/fire spell damage only",()=>{const c=celWar(6,"2014",x=>{
+      x.attacks.push(spellAtk("Guiding Bolt",[{d:"4d6",t:"radiant"}]));
+      x.attacks.push(spellAtk("Eldritch Blast",[{d:"1d10",t:"force"}]));
+      x.attacks.push({name:"Sun blade",ability:"str",proficient:true,kind:"melee",magic:0,addAbility:true,bonusMisc:0,dmgParts:[{d:"1d8",t:"radiant"}]});
+      x.attacks.push(spellAtk("Mixed",[{d:"1d10",t:"force"},{d:"2d6",t:"Fire"}]));});
+    ok(grantedDefs(c).some(d=>d.s==="resist"&&d.t==="radiant"),"resists radiant");
+    eq(attackDmgExtra(c,c.attacks[0]),3,"Guiding Bolt +3");
+    eq(attackDmgExtra(c,c.attacks[1]),0,"force spell: nothing");
+    eq(attackDmgExtra(c,c.attacks[2]),0+0,"weapons never get it (Str 10)");
+    eq(attackDmgFlats(c,c.attacks[3]).join(),"0,3","rides on the fire part");
+    ok(attackBreakdown(c,c.attacks[0]).dmg.some(r=>/Radiant Soul/.test(r[0])&&r[1]===3),"named line in the breakdown");
+    ok(/4d6\+3 radiant/.test(attackDmgLabel(c,c.attacks[0],true)),"label shows it");
+    const low=celWar(5,"2014",x=>x.attacks.push(spellAtk("Guiding Bolt",[{d:"4d6",t:"radiant"}])));
+    eq(attackDmgExtra(low,low.attacks[0]),0,"not before level 6");});
+  t("Spell attacks use spell bonuses, never weapon ones",()=>{const c=celWar(5,"2014",x=>{
+      x.attacks.push(spellAtk("Guiding Bolt",[{d:"4d6",t:"radiant"}],{magic:2}));
+      x.customBuffs=[{name:"Weapon blessing",ic:"🔆",fx:[{t:"atk.all",v:1},{t:"dmg.all",v:2}],d20:null,dmgDice:""}];
+      x.features.push({name:"Rod",effects:[{t:"spell.atk",v:1}]});});
+    const a=c.attacks[0];
+    eq(attackBonus(c,a),3+3+1,"Cha + prof + Rod; magic weapon ignored");
+    c.activeBuffs=["Weapon blessing","Enlarge","Bless"];
+    eq(attackBonus(c,a),7,"atk.all is for weapons");eq(attackDmgExtra(c,a),0,"dmg.all is for weapons");
+    ok(!/1d4/.test(attackDmgLabel(c,a,true)),"Enlarge dice are weapon damage");
+    ok(/\+1d4/.test(attackBreakdown(c,a).hitTotal),"Bless still helps spell attack rolls");});
+  t("Save spells show the save DC instead of a to-hit",()=>{const c=celWar(5,"2014",x=>{
+      x.attacks.push(spellAtk("Sacred Flame",[{d:"1d8",t:"radiant"}],{save:"dex"}));x.features.push({name:"Rod",effects:[{t:"spell.dc",v:1}]});});
+    const a=c.attacks[0];eq(attackHitLabel(c,a),"DC "+(8+3+3+1)+" DEX");eq(attackSaveDC(c,a),spellDC(c),"same as the Spells tab");
+    const b=attackBreakdown(c,a);eq(b.hitTitle,"🎯 Save DC");ok(b.hit.some(r=>r[0]==="Rod"),"DC bonus listed");});
+  t("Celestial Resilience: temp HP after rests, keeping the higher value",()=>{const c=celWar(10);
+    shortRest();eq(c.hp.temp,10+3);
+    c.hp.temp=20;shortRest();eq(c.hp.temp,20,"temp HP don't stack");
+    longRest();eq(c.hp.temp,13,"long rest clears temp HP, then the patron grants them");
+    const plain=mk(x=>{x.classes=[{name:"Warlock",subclass:"The Fiend",level:10}];x.abilities.cha=16;});shortRest();eq(plain.hp.temp||0,0,"other patrons get nothing");});
+  t("Celestial Resilience (2024) also triggers on Magical Cunning",()=>{const c=celWar(10,"2024");
+    c.features.push({name:"Magical Cunning",uses:1,recharge:"long",cls:"Warlock"});useFeature(c.features.length-1);eq(c.hp.temp,13);});
+  t("death save at 0 HP offers Searing Vengeance; using it heals half and spends the use",()=>{const c=celWar(14);
+    c.hp.current=0;c.deathSaves={s:1,f:2};c.conditions=["Unconscious","Prone","Poisoned"];
+    let shown="";const keep=openModal;openModal=h=>{shown=h;};
+    try{rollDeathSave();}finally{openModal=keep;}
+    ok(/Searing Vengeance/.test(shown)&&/Roll the death save/.test(shown),"both choices offered");
+    const i=feat(c,"Searing Vengeance");searingVengeance(i);
+    eq(c.hp.current,20);eq(c.deathSaves.f,0);eq(c.conditions.join(),"Poisoned");eq(c.features[i].usesLeft,0);
+    eq(db.rollLog[0].label,"Searing Vengeance (radiant)");rng(db.rollLog[0].total,2+3,16+3);
+    c.hp.current=0;shown="";openModal=h=>{shown=h;};
+    try{rollDeathSave();}finally{openModal=keep;}
+    ok(!/Searing Vengeance/.test(shown),"spent: no offer, just the roll");});
+  t("Searing Vengeance: 2014 is self-only, 2024 also works for an ally",()=>{
+    const c=celWar(14);const i=feat(c,"Searing Vengeance");searingVengeance(i);eq(c.features[i].usesLeft??1,1,"2014 at full HP: refused");
+    const d=celWar(14,"2024");const j=feat(d,"Searing Vengeance");searingVengeance(j);eq(d.features[j].usesLeft,0);eq(d.hp.current,40,"your HP unchanged");});
+  t("bonus cantrips / patron spells are added as always prepared and don't count as cantrips known",()=>{
+    const keep=SRD.spells2014,keep24=SRD.spells2024;
+    const sp=(name,level)=>({name,level,school:"evocation",time:"1 action",range:"60 ft",components:"V, S",duration:"Instant",conc:false,ritual:false,desc:"",classes:["Cleric"]});
+    try{const lib=[sp("Light",0),sp("Sacred Flame",0),sp("Cure Wounds",1),sp("Aid",2),sp("Daylight",3),sp("Revivify",3),sp("Guardian of Faith",4)];
+      SRD.spells2014=lib;SRD.spells2024=lib;
+      const c=celWar(5);addSubclassSpells(c);
+      eq(c.spellcasting.spells.map(s=>s.name).sort().join(),"Light,Sacred Flame","2014: only the cantrips are free");
+      ok(c.spellcasting.spells.every(s=>s.always),"always prepared");
+      ok(/cantrips <b>0\//.test(preparedInfo(c)),"not counted as cantrips known");
+      const d=celWar(5,"2024");addSubclassSpells(d);
+      eq(d.spellcasting.spells.map(s=>s.name).sort().join(),"Aid,Cure Wounds,Daylight,Light,Revivify,Sacred Flame","2024 up to level 5 (missing ones skipped)");
+    }finally{SRD.spells2014=keep;SRD.spells2024=keep24;}});
+  t("the expanded spell list is offered only to 2014 Celestial warlocks",()=>{
+    const e=expandedSpellNames(celWar(1),"Warlock");ok(e.has("cure wounds")&&e.has("flame strike")&&e.size===10);
+    eq(expandedSpellNames(celWar(1),"Cleric").size,0);eq(expandedSpellNames(celWar(3,"2024"),"Warlock").size,0,"2024 spells are always prepared instead");});
+  t("attack kind, save and damage-type filters are sanitised on load",()=>{
+    const c=migrate({...newCharacter(),attacks:[{name:"A",kind:"psychic",save:"dex"},{name:"B",kind:"spell",save:"luck"},{name:"C",kind:"spell",save:"wis"}],
+      features:[{name:"F",effects:[{t:"dmg.spell",v:2,dt:"Fire, banana"},{t:"dmg.spell",v:2,dt:["banana"]}]}]});
+    eq(c.attacks[0].kind,"melee");eq(c.attacks[0].save,undefined);eq(c.attacks[1].save,undefined);eq(c.attacks[2].save,"wis");
+    eq(c.features[0].effects[0].dt.join(),"fire");eq(c.features[0].effects[1].dt.length,0,"unknown types: matches nothing");});
+  t("editing effects keeps fields the editor doesn't show (ability, damage types)",()=>{
+    const box=document.createElement("div");box.id="fxList";box.style.display="none";document.body.appendChild(box);
+    try{box.innerHTML=fxRow({t:"dmg.melee",v:"barbarian>=9?3:2",ab:"str",ed:"2014"})+fxRow({t:"dmg.spell",v:"cha",dt:["radiant","fire"]});
+      const out=fxCollect();eq(out[0].ab,"str");eq(out[0].ed,"2014");eq(out[0].v,"barbarian>=9?3:2");eq(out[1].dt.join(),"radiant,fire");
+    }finally{box.remove();}});
 
   /* ---- attack breakdown & Rage rules ---- */
   const brute=(str,dex,lv,more)=>mk(x=>{x.classes=[{name:"Barbarian",subclass:"",level:lv||3}];x.abilities.str=str;x.abilities.dex=dex;
