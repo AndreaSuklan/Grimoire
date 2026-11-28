@@ -54,6 +54,13 @@ An offline-first Progressive Web App (PWA) for managing D&D 5e characters on And
 - **Oath of the Ancients built in**: full feature scaffold with mechanical summaries (paraphrased — paste your book's exact text via ✏️ if preferred), Channel Divinity options, Aura of Warding as an automatic custom resistance, Undying Sentinel/Elder Champion uses, and **oath spells auto-added as always prepared** (Ancients, Devotion and Vengeance lists — all SRD spells) once the SRD library is downloaded.
 - **Channel Divinity card** in the Spells tab: shared uses as gold pips, with your oath/domain options listed under it, each spending the shared pool. Options are added automatically for all official oaths & domains (SRD text auto-fills; the rest scaffold a paste-your-text entry). Homebrew options via ＋ Option.
 
+### New in v1.10 — Bonuses that target one item or spell
+- Every bonus in an Effects editor (features, items, custom buffs) has **Applies to**: everything (as before), *this item only* (items), one weapon, one armor or shield, one spell, spells of a school (Empowered Evocation), or cantrips only (Potent Cantrip).
+- **New bonuses on a weapon default to "this item only"**, so a Flame Tongue's bonus no longer spills onto every other weapon. Bonuses you already have keep applying to everything until you change them.
+- A custom buff can **ask when switched on** ("which weapon?" for Magic Weapon). The chosen target shows next to the buff on Main and is forgotten when the buff ends.
+- Targeted bonuses are named in the breakdown with their target ("🔆 Magic Weapon → Longsword"). A bonus for one spell's DC changes that spell's attack, not the Spells tab DC. An armor or shield target counts only while it's equipped.
+- Renaming a spell carries its targeted bonuses along. A removed item or a broken target matches nothing rather than everything.
+
 ### New in v1.9 — Spell attacks linked to your spells
 - **⚔️ Set up attack** (spell ⋮ menu on the Spells tab) creates the spell's attack on Main → Attacks, prefilled from the spell's text: damage dice and type, attack roll / saving throw / hits automatically, half damage on a save, upcast dice, rays or darts, cantrip upgrade, condition. Check it and save — nothing is saved without you seeing it.
 - **Cast picks the slot**: Cast on a spell with an attack lists the slots you can spend with the damage at each level, spends the one you pick, and opens the attack at that level. The roll buttons on Main never spend slots; the breakdown has level pills to see or roll any level for free.
